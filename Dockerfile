@@ -47,12 +47,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # ==============================================================================
 # [INICIO SECCIÓN 4 - INSTALACIÓN DE LIBRERÍAS PYTHON Y PLAYWRIGHT]
-# (Propósito: Instala las librerías de requirements.txt y el navegador Chromium para capturas)
+# (Propósito: Instala las librerías de requirements.txt y el navegador Chromium)
 # ==============================================================================
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN playwright install chromium
-RUN playwright install-deps chromium
 # ==============================================================================
 # [FIN SECCIÓN 4 - INSTALACIÓN DE LIBRERÍAS PYTHON Y PLAYWRIGHT]
 # ==============================================================================
