@@ -1,0 +1,38 @@
+# ==============================================================================
+# [INICIO SECCIÓN 1 - FRAMEWORK Y SERVIDOR WEB]
+# (Propósito: Define FastAPI para crear la API REST y Uvicorn para ejecutar el servidor)
+# ==============================================================================
+fastapi==0.110.0
+uvicorn==0.28.0
+# ==============================================================================
+# [FIN SECCIÓN 1 - FRAMEWORK Y SERVIDOR WEB]
+# ==============================================================================
+
+# ==============================================================================
+# [INICIO SECCIÓN 2 - INTELIGENCIA ARTIFICIAL Y BÚSQUEDA WEB]
+# (Propósito: Librería oficial de Google Gemini API para análisis y búsqueda con Grounding)
+# ==============================================================================
+google-generativeai==0.8.3
+# ==============================================================================
+# [FIN SECCIÓN 2 - INTELIGENCIA ARTIFICIAL Y BÚSQUEDA WEB]
+# ==============================================================================
+
+# ==============================================================================
+# [INICIO SECCIÓN 3 - CAPTURA DE PANTALLA Y PROCESAMIENTO DE IMÁGENES]
+# (Propósito: Playwright para automatizar el navegador headless y Pillow para gestionar gráficos)
+# ==============================================================================
+playwright==1.42.0
+Pillow==10.2.0
+# ==============================================================================
+# [FIN SECCIÓN 3 - CAPTURA DE PANTALLA Y PROCESAMIENTO DE IMÁGENES]
+# ==============================================================================
+
+# ==============================================================================
+# [INICIO SECCIÓN 4 - GENERACIÓN Y DOCUMENTACIÓN EN WORD]
+# (Propósito: python-docx para compilar y dar formato exacto de 23x16 cm al documento .docx)
+# ==============================================================================
+python-docx==1.1.0
+pydantic==2.6.4
+# ==============================================================================
+# [FIN SECCIÓN 4 - GENERACIÓN Y DOCUMENTACIÓN EN WORD]
+# ==============================================================================
