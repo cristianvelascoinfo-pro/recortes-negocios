@@ -1,6 +1,6 @@
 /* ==============================================================================
    [SECCIÓN 1 - CONFIGURACIÓN DE ELEMENTOS Y EVENTOS INICIALES]
-   (Propósito: Captura los elementos del DOM y asigna el evento al botón de búsqueda)
+   (Propósito: Captura los elementos del DOM y asigna eventos principales)
    ============================================================================== */
 document.addEventListener("DOMContentLoaded", () => {
     const btnBuscar = document.getElementById("btnBuscar");
@@ -9,7 +9,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const tabContent = document.getElementById("tabContent");
     const btnDescargar = document.getElementById("btnDescargar");
 
-    let noticiaSeleccionada = null;
     let archivoGeneradoUrl = "";
 
     /* ==============================================================================
@@ -21,6 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
         btnBuscar.innerText = "⏳ BUSCANDO NOTICIAS EN VIVO...";
         newsGrid.innerHTML = "";
         resultsPanel.classList.remove("active");
+        archivoGeneradoUrl = "";
 
         try {
             const response = await fetch("/api/buscar", { method: "POST" });
@@ -41,8 +41,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     <div class="source">${noticia.medio || 'MEDIO DIGITAL'}</div>
                     <h3>${noticia.titulo}</h3>
                     <p>${noticia.resumen_corto}</p>
-                    <button class="btn-neon" style="width: 100%; margin-top: 10rem;">SELECCIONAR NOTICIA ${index + 1}</button>
+                    <button class="btn-neon btn-seleccionar" style="width: 100%; margin-top: 1rem;">SELECCIONAR NOTICIA ${index + 1}</button>
                 `;
+
+                const btnSeleccionar = card.querySelector(".btn-seleccionar");
+                btnSeleccionar.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    procesarNoticia(noticia);
+                });
 
                 card.addEventListener("click", () => procesarNoticia(noticia));
                 newsGrid.appendChild(card);
@@ -61,10 +67,13 @@ document.addEventListener("DOMContentLoaded", () => {
        (Propósito: Envia la noticia elegida al backend para generar el resumen, análisis y .docx)
        ============================================================================== */
     async function procesarNoticia(noticia) {
-        noticiaSeleccionada = noticia;
         const numRecorte = document.getElementById("numRecorte").value || 2;
 
         resultsPanel.classList.add("active");
+        btnDescargar.disabled = true;
+        btnDescargar.style.opacity = "0.5";
+        btnDescargar.innerText = "⏳ GENERANDO DOCUMENTO WORD...";
+
         tabContent.innerHTML = "<p style='color: var(--primary-neon);'>⏳ Procesando noticia con Gemini AI, tomando captura HD del encabezado y creando el documento Word...</p>";
 
         try {
@@ -82,17 +91,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (resultado.exito) {
                 archivoGeneradoUrl = resultado.download_url;
+                btnDescargar.disabled = false;
+                btnDescargar.style.opacity = "1";
+                btnDescargar.innerText = "📥 DESCARGAR DOCUMENTO WORD (.DOCX) LISTO PARA IMPRIMIR";
+
                 tabContent.innerHTML = `
                     <h3>✅ Vista Previa del Análisis (15 Líneas):</h3>
-                    <p style="margin-top: 10rem; line-height: 1.6;">${resultado.analisis}</p>
+                    <p style="margin-top: 1rem; line-height: 1.6;">${resultado.analisis}</p>
                 `;
             } else {
                 tabContent.innerHTML = `<p style="color: red;">Error al procesar: ${resultado.error}</p>`;
+                btnDescargar.innerText = "❌ ERROR AL GENERAR ARCHIVO";
             }
 
         } catch (error) {
             console.error("Error al procesar la noticia:", error);
             tabContent.innerHTML = "<p style='color: red;'>Error en el servidor al generar el informe.</p>";
+            btnDescargar.innerText = "❌ ERROR EN EL SERVIDOR";
         }
     }
 
@@ -104,7 +119,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (archivoGeneradoUrl) {
             window.location.href = archivoGeneradoUrl;
         } else {
-            alert("Primero debes seleccionar y procesar una noticia.");
+            alert("El documento aún se está generando. Por favor espera unos segundos.");
         }
     });
 });
