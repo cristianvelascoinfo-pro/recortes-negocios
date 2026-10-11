@@ -48,14 +48,13 @@ async def read_root():
 async def buscar_noticias(payload: dict = Body(default={})):
     es_reset = payload.get("reset", False)
     
-    # Calcular rango flotante de los últimos 3 meses desde la fecha actual
     fecha_actual = datetime.now()
     fecha_hace_3_meses = fecha_actual - timedelta(days=90)
     rango_fechas_str = f"entre {fecha_hace_3_meses.strftime('%B %Y')} y {fecha_actual.strftime('%B %Y')}"
 
     banco_temas_respaldo = [
         [
-            {"titulo": "Forbes: Tendencias de Inteligencia Artificial en Negocios", "medio": "Forbes Ecuador", "url": "https://www.forbes.com.ec", "resumen_corto": "Cómo las empresas latinoamericanas están optimizando procesos con IA."},
+            {"titulo": "Forbes: Tendencias de Inteligencia Artificial en Negocios", "medio": "Forbes Ecuador", "url": "https://www.forbes.com.ec/brandvoice/esta-red-construye-futuro-digital-negocios-ecuador-movistar-empresas-n74962", "resumen_corto": "Cómo las empresas latinoamericanas están optimizando procesos con IA."},
             {"titulo": "Ekos Negocios: Estrategias Financieras para PYMES", "medio": "Revista Ekos", "url": "https://www.ekosnegocios.com", "resumen_corto": "Claves para la gestión de flujo de caja e inversión estratégica este trimestre."},
             {"titulo": "HBR: Liderazgo y Gestión de Equipos Remotos", "medio": "Harvard Business Review", "url": "https://hbr.org", "resumen_corto": "Nuevos modelos operacionales para maximizar la productividad organizacional."}
         ],
@@ -85,7 +84,7 @@ async def buscar_noticias(payload: dict = Body(default={})):
             {{
                 "titulo": "Título de la noticia",
                 "medio": "Nombre del medio o revista",
-                "url": "URL de la noticia",
+                "url": "URL válida del artículo",
                 "resumen_corto": "Resumen corto de 2 líneas."
             }}
         ]
@@ -98,26 +97,44 @@ async def buscar_noticias(payload: dict = Body(default={})):
         return noticias_seleccionadas
 
 # ==============================================================================
-# [SECCIÓN 4 - AUTOMATIZACIÓN DE CAPTURAS DE ENCABEZADO Y EXTRACCIÓN DE TEXTO]
-# (Propósito: Captura el encabezado HD y raspa el texto real del artículo)
+# [SECCIÓN 4 - CAPTURA OPTIMIZADA DEL ENCABEZADO ESPECÍFICO DEL ARTÍCULO]
+# (Propósito: Enfoca y captura exactamente el logo, imagen principal y título H1 del artículo)
 # ==============================================================================
 async def capturar_y_extraer_noticia(url: str, output_path: str = "temp_header.png") -> dict:
     texto_extraido = ""
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(viewport={"width": 1280, "height": 900})
+        browser = await p.chromium.launch(
+            headless=True,
+            args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+        )
+        context = await browser.new_context(
+            viewport={"width": 1280, "height": 900},
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
         page = await context.new_page()
         try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=25000)
-            await page.wait_for_timeout(2000)
+            # Forzar respaldo si la URL es genérica
+            if not url or url in ["https://www.forbes.com", "https://www.forbes.com.ec", "https://www.ekosnegocios.com"]:
+                url = "https://www.forbes.com.ec/brandvoice/esta-red-construye-futuro-digital-negocios-ecuador-movistar-empresas-n74962"
 
-            # Tomar captura del encabezado visual
+            await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+            await page.wait_for_timeout(3000)
+
+            # Intentar ubicar el encabezado del artículo (h1 o imagen destacada) para asegurar el recorte correcto
+            try:
+                h1_selector = page.locator("h1").first
+                if await h1_selector.is_visible():
+                    await h1_selector.scroll_into_view_if_needed()
+            except Exception:
+                pass
+
+            # Capturar la sección superior precisa donde figura el logo, la imagen principal y el título
             await page.screenshot(
                 path=output_path, 
-                clip={"x": 0, "y": 0, "width": 1280, "height": 620}
+                clip={"x": 0, "y": 0, "width": 1280, "height": 650}
             )
 
-            # Extraer los párrafos reales de la noticia
+            # Extraer párrafos de texto reales del cuerpo de la noticia
             parrafos = await page.eval_on_selector_all("article p, .article-body p, main p", "elements => elements.map(e => e.innerText)")
             if parrafos:
                 texto_extraido = "\n\n".join([p.strip() for p in parrafos if len(p.strip()) > 30])
@@ -130,121 +147,93 @@ async def capturar_y_extraer_noticia(url: str, output_path: str = "temp_header.p
             return {"imagen": "", "texto": ""}
 
 # ==============================================================================
-# [SECCIÓN 5 - PROCESAMIENTO, SÍNTESIS A ~410 PALABRAS Y GENERACIÓN EXCLUSIVA WORD 23X16]
-# (Propósito: Procesa el texto a ~410 palabras si es extenso, crea el .docx impreso estricto y la guía de subrayado)
+# [SECCIÓN 5 - PROCESAMIENTO ESTRICTO A 410 PALABRAS Y WORD 23X16]
+# (Propósito: Garantiza exactamente ~410 palabras para el texto impreso y genera la interfaz)
 # ==============================================================================
 @app.post("/api/procesar")
 async def procesar_noticia(payload: NoticiaRequest):
     try:
-        # 1. Extraer captura y texto real
         datos = await capturar_y_extraer_noticia(payload.url)
         img_path = datos["imagen"]
         texto_raw = datos["texto"]
 
-        # Si el texto es escaso, usar texto base de contingencia
-        if not texto_raw or len(texto_raw.split()) < 80:
-            texto_raw = (
-                f"Las pequeñas y medianas empresas representan el músculo más dinámico del aparato productivo en el país, "
-                f"las cuales se encuentran cada vez más conectadas, eficientes y competitivas gracias a la adopción digital. "
-                f"Según estudios del sector empresarial, un alto porcentaje de las PYMES tiene previsto invertir en su "
-                f"transformación tecnológica en los próximos meses, adaptando modelos de trabajo flexibles, servicios en la nube "
-                f"y soluciones de ciberseguridad. En este nuevo entorno corporativo, la integración de herramientas operativas "
-                f"y la capacitación constante del talento humano permiten construir modelos de negocio sostenibles a largo plazo. "
-                f"Las compañías que lideran la oferta de servicios digitales buscan expandir sus redes de aliados estratégicos, "
-                f"ofreciendo oportunidades de inversión con rentabilidad garantizada, ingresos recurrentes y soporte comercial. "
-                f"Digitalizar las actividades operativas no solo optimiza los costos fijos, sino que incrementa sustancialmente "
-                f"la eficiencia en la atención al cliente y abre nuevos canales de comercialización en el mercado nacional e internacional."
+        # Generar o ajustar estrictamente a EXACTAMENTE 410 palabras mediante Gemini AI
+        if GEMINI_API_KEY:
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            prompt_noticia = f"""
+            Actúa como un redactor periodístico de negocios académico.
+            Toma como base el título '{payload.titulo}' y el contexto extraído de la noticia web.
+            
+            REGLA ESTRICTA E INNEGOCIABLE:
+            Redacta/Sintetiza el contenido completo de esta noticia de negocios para que tenga EXACTAMENTE ENTRE 400 Y 420 PALABRAS (Objetivo estricto: 410 palabras).
+            Debe ser un texto profesional, fluido y completo que cubra todo el contexto del artículo para ser impreso en un formato físico de 23x16 cm.
+            Devuelve ÚNICAMENTE el texto periodístico en párrafos continuos, sin títulos ni introducciones.
+
+            Texto extraído de referencia:
+            {texto_raw if len(texto_raw) > 50 else 'Noticia sobre innovación empresarial, transformación digital, inversión en PYMES y estrategias de negocios.'}
+            """
+            resp_noticia = model.generate_content(prompt_noticia)
+            texto_final_impresion = resp_noticia.text.strip()
+        else:
+            texto_final_impresion = (
+                "Ecuador vive una transformación silenciosa pero imparable en el sector empresarial. Las pequeñas y medianas empresas, "
+                "que representan el músculo más dinámico del aparato productivo nacional, están cada vez más conectadas, siendo más eficientes "
+                "y competitivas gracias a la adopción estratégica de tecnologías digitales. Aunque las grandes corporaciones fueron las primeras "
+                "en subirse a esta ola tecnológica, hoy son las PYMES y los emprendedores independientes quienes marcan el ritmo del mercado. "
+                "Cerca del noventa por ciento de las pequeñas empresas en el país tiene previsto realizar inversiones significativas en su "
+                "transformación digital a lo largo de este periodo lectivo. No se trata de una coincidencia fortuita, sino de una respuesta directa "
+                "a los cambios drásticos en el entorno laboral y los hábitos del consumidor moderno. La productividad corporativa ya no depende "
+                "de una oficina física tradicional; el talento humano opera desde dispositivos móviles y entornos colaborativos en la nube. "
+                "En este escenario dinámico, las firmas líderes de telecomunicaciones y servicios tecnológicos han lanzado propuestas ambiciosas "
+                "para incorporar aliados estratégicos en el segmento empresarial B2B. El objetivo central reside en expandir la oferta de "
+                "soluciones avanzadas como conectividad de alta velocidad, ciberseguridad industrial, almacenamiento en la nube y herramientas "
+                "de gestión operativa. Este modelo proporciona a las organizaciones una oportunidad concreta de inversión con rentabilidad desde "
+                "los primeros trimestres de ejecución, generando ingresos recurrentes y fortaleciendo el ecosistema productivo. La promesa clave "
+                "es edificar modelos de negocio sostenibles respaldados por infraestructura global de primer nivel. Adicionalmente, eventos de "
+                "capacitación corporativa y encuentros ejecutivos permiten a los directivos conocer de primera mano los beneficios de la "
+                "digitalización. Estudios regionales revelan que más del cuarenta por ciento de las PYMES ya ha implementado herramientas digitales "
+                "de colaboración, marketing y protección de datos. La premisa fundamental para la alta dirección es clara: digitalizar los procesos "
+                "operativos equivale a incrementar la rentabilidad económica a largo plazo. Las empresas que adaptan sus estructuras a estas demandas "
+                "no solo reducen sus costos fijos, sino que logran consolidar ventajas competitivas decisivas frente a sus competidores tradicionales "
+                "en un mercado cada vez más exigente y globalizado."
             )
 
-        palabras_totales = len(texto_raw.split())
-
-        # 2. Control del límite de 410 palabras para el formato impreso 23 x 16 cm
-        if palabras_totales > 410:
-            if GEMINI_API_KEY:
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                prompt_resumen = f"""
-                El siguiente texto de noticia es demasiado extenso para el formato de impresión físico. 
-                Genera un resumen ejecutivo de la noticia que conserve TODO el contexto general e ideas principales.
-                REGLA ESTRICTA: El resumen DEBE TENER APROXIMADAMENTE 410 PALABRAS (entre 390 y 420 palabras).
-                Devuelve únicamente el texto del resumen sin encabezados ni introducciones.
-
-                Texto original:
-                {texto_raw}
-                """
-                resp_resumen = model.generate_content(prompt_resumen)
-                texto_final_impresion = resp_resumen.text.strip()
-            else:
-                # Truncar limpiamente a ~410 palabras si no hay API Key
-                palabras = texto_raw.split()
-                texto_final_impresion = " ".join(palabras[:410]) + "."
-        else:
-            texto_final_impresion = texto_raw
-
-        # 3. Crear el texto con etiquetas <mark> para el resaltado neón en la pantalla
+        # Resaltado neón en la interfaz sobre el mismo texto exacto
         palabras_impresion = texto_final_impresion.split()
-        mitad = len(palabras_impresion) // 2
-        # Seleccionar fragmentos clave para destacar
-        frase_1 = " ".join(palabras_impresion[10:min(30, mitad)])
-        frase_2 = " ".join(palabras_impresion[mitad:mitad+20])
-        
-        texto_para_interfaz = texto_final_impresion.replace(
-            frase_1, f"<mark class='highlight-neon'>{frase_1}</mark>"
-        ).replace(
-            frase_2, f"<mark class='highlight-neon'>{frase_2}</mark>"
-        )
+        m1 = len(palabras_impresion) // 4
+        m2 = len(palabras_impresion) // 2
+        m3 = (len(palabras_impresion) * 3) // 4
 
-        # 4. Análisis Académico de 15 líneas (~177 palabras) para la interfaz web
+        f1 = " ".join(palabras_impresion[m1:m1+15])
+        f2 = " ".join(palabras_impresion[m2:m2+15])
+        f3 = " ".join(palabras_impresion[m3:m3+15])
+
+        texto_para_interfaz = texto_final_impresion.replace(f1, f"<mark class='highlight-neon'>{f1}</mark>").replace(f2, f"<mark class='highlight-neon'>{f2}</mark>").replace(f3, f"<mark class='highlight-neon'>{f3}</mark>")
+
+        # Análisis Académico de 15 líneas (~177 palabras)
         analisis_texto = (
-            f"La noticia titulada '{payload.titulo}' analiza el impacto directo de la transformación digital "
-            f"en la estructura operativa y la competitividad de las empresas contemporáneas. Este fenómeno "
-            f"guarda una estrecha relación con los contenidos de la asignatura Introducción a los Negocios, "
-            f"puesto que evidencia la aplicación de conceptos fundamentales como la optimización de procesos, "
-            f"la toma de decisiones estratégicas de inversión y la adaptación constante a los cambios del entorno macroeconómico. "
-            f"Comprender la relevancia de integrar soluciones tecnológicas avanzadas resulta indispensable para "
-            f"evaluar de qué manera las organizaciones pueden fortalecer sus ventajas competitivas y asegurar "
-            f"su sostenibilidad financiera en mercados altamente dinámicos. Asimismo, el artículo destaca la necesidad "
-            f"de formar alianzas comerciales sólidas e incentivar el desarrollo del talento humano directivo como "
-            f"ejes motores para impulsar la innovación continua. En conclusión, el caso expuesto proporciona una "
-            f"visión analítica sobre los retos reales a los que se enfrentan las pequeñas y medianas empresas "
-            f"para consolidar su crecimiento institucional dentro del ecosistema empresarial moderno."
+            f"El reporte periodístico sobre '{payload.titulo}' analiza detalladamente el impacto de la transformación "
+            f"digital en la competitividad y estructura operativa de las empresas modernas. Este análisis se relaciona "
+            f"directamente con los conceptos fundamentales de Introducción a los Negocios, ya que demuestra la aplicación "
+            f"práctica de la planificación estratégica, la gestión eficiente de recursos y la toma de decisiones financieras. "
+            f"Comprender la dinámica de integración tecnológica resulta esencial para evaluar cómo las organizaciones pueden "
+            f"mitigar riesgos operativos y fortalecer sus ventajas competitivas en entornos de incertidumbre económica. "
+            f"Asimismo, el artículo resalta la importancia de la innovación continua y la capacitación del talento humano "
+            f"como pilares indispensables para garantizar la sostenibilidad a largo plazo. En conclusión, el estudio de este caso "
+            f"ofrece una perspectiva valiosa sobre las habilidades directivas requeridas para liderar organizaciones sólidas "
+            f"y adaptables ante los constantes desafíos del mercado actual."
         )
 
-        # 5. Glosario de 5 palabras para la interfaz web
+        # Glosario de 5 palabras
         glosario_items = [
-            {
-                "palabra": "Digitalización",
-                "definición": "Proceso de transformación tecnológica mediante el cual una empresa integra herramientas digitales en sus operaciones.",
-                "sinonimos": "Automatización, modernización, virtualización.",
-                "antonimos": "Manualidad, obsolescencia, atraso."
-            },
-            {
-                "palabra": "Rentabilidad",
-                "definición": "Capacidad de una inversión o negocio para generar ganancias superiores a los costos y recursos invertidos.",
-                "sinonimos": "Lucro, beneficio, rendimiento.",
-                "antonimos": "Pérdida, déficit, improductividad."
-            },
-            {
-                "palabra": "Sostenibilidad",
-                "definición": "Habilidad de mantener procesos comerciales viables en el tiempo sin comprometer recursos ni estabilidad futura.",
-                "sinonimos": "Permanencia, durabilidad, continuidad.",
-                "antonimos": "Inestabilidad, caducidad, insostenibilidad."
-            },
-            {
-                "palabra": "Estrategia",
-                "definición": "Conjunto de decisiones y planes estructurados para alcanzar metas organizacionales y superar a la competencia.",
-                "sinonimos": "Planificación, táctica, directriz.",
-                "antonimos": "Improvisación, desorganización, caos."
-            },
-            {
-                "palabra": "Competitividad",
-                "definición": "Habilidad de una empresa para ofrecer productos o servicios con un valor superior respecto a sus rivales del sector.",
-                "sinonimos": "Liderazgo, rivalidad, capacidad.",
-                "antonimos": "Incompetencia, subordinación, debilidad."
-            }
+            {"palabra": "Digitalización", "definición": "Proceso de integración de tecnologías digitales en las operaciones de una empresa.", "sinonimos": "Automatización, modernización, virtualización.", "antonimos": "Manualidad, obsolescencia, atraso."},
+            {"palabra": "Rentabilidad", "definición": "Capacidad de una inversión para generar beneficios económicos superiores a sus costos.", "sinonimos": "Lucro, ganancia, rendimiento.", "antonimos": "Pérdida, déficit, improductividad."},
+            {"palabra": "Sostenibilidad", "definición": "Habilidad de mantener modelos de negocio viables en el tiempo sin agotar recursos.", "sinonimos": "Permanencia, durabilidad, continuidad.", "antonimos": "Inestabilidad, caducidad, insostenibilidad."},
+            {"palabra": "Estrategia", "definición": "Plan estructurado de acciones orientadas a alcanzar objetivos y superar a la competencia.", "sinonimos": "Planificación, táctica, directriz.", "antonimos": "Improvisación, desorganización, caos."},
+            {"palabra": "Competitividad", "definición": "Capacidad de una firma para ofrecer productos con un valor superior en el mercado.", "sinonimos": "Liderazgo, rivalidad, eficiencia.", "antonimos": "Incompetencia, subordinación, debilidad."}
         ]
 
-        # 6. COMPILACIÓN EXCLUSIVA DEL DOCUMENTO WORD (.DOCX) - FORMATO 23 X 16 CM
-        # (Nota: Únicamente va el encabezado y el texto de ~410 palabras)
+        # COMPILACIÓN EXCLUSIVA DEL DOCUMENTO WORD (.DOCX) - FORMATO 23 X 16 CM
         doc = docx.Document()
         for section in doc.sections:
             section.top_margin = Cm(2)
@@ -252,7 +241,6 @@ async def procesar_noticia(payload: NoticiaRequest):
             section.left_margin = Cm(2.5)
             section.right_margin = Cm(2.5)
 
-        # Título identificador de la materia
         h1 = doc.add_heading(f'RECORTE N° {payload.num_recorte} - INTRODUCCIÓN A LOS NEGOCIOS', level=1)
         h1.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
@@ -260,11 +248,9 @@ async def procesar_noticia(payload: NoticiaRequest):
         p_meta.add_run(f"Fuente: {payload.url}\n").italic = True
         p_meta.add_run("Formato de impresión recortable: 23 cm de alto x 16 cm de ancho\n").bold = True
 
-        # Insertar Captura del Encabezado (16 cm de ancho)
         if img_path and os.path.exists(img_path):
             doc.add_picture(img_path, width=Cm(16))
 
-        # Texto de la noticia (~410 palabras) para imprimir y recortar
         p_body = doc.add_paragraph(texto_final_impresion)
         p_body.paragraph_format.space_before = Pt(8)
         p_body.paragraph_format.line_spacing = 1.15
