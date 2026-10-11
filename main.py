@@ -32,6 +32,23 @@ class NoticiaRequest(BaseModel):
     url: str
     titulo: str
 
+def generar_contenido_seguro(prompt_texto: str) -> str:
+    """Función auxiliar para probar múltiples modelos de Gemini de forma segura ante errores 404"""
+    if not GEMINI_API_KEY:
+        return ""
+    
+    modelos_a_probar = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']
+    for nombre_modelo in modelos_a_probar:
+        try:
+            model = genai.GenerativeModel(nombre_modelo)
+            response = model.generate_content(prompt_texto)
+            if response and response.text:
+                return response.text.strip()
+        except Exception as e:
+            print(f"Aviso con modelo {nombre_modelo}: {e}")
+            continue
+    return ""
+
 # ==============================================================================
 # [SECCIÓN 2 - RUTAS PRINCIPALES Y SERVICIO DE INTERFAZ WEB]
 # (Propósito: Servir la página web index.html en la ruta raíz)
@@ -70,31 +87,32 @@ async def buscar_noticias(payload: dict = Body(default={})):
     if not GEMINI_API_KEY:
         return noticias_seleccionadas
 
-    try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        seed_prompt = f"Timestamp: {int(time.time())}"
-        prompt = f"""
-        Busca o proporciona 3 noticias REALES Y RECIENTES publicadas {rango_fechas_str} sobre negocios, empresas, economía, emprendimiento o administración en Ecuador y Latinoamérica.
-        Fuentes permitidas: Forbes Ecuador, Revista Ekos, Harvard Business Review, Bloomberg Línea, América Economía, El Economista, Diario Expansión.
-        ({seed_prompt})
-        {"IMPORTANTE: Muestra noticias completamente distintas a las obtenidas anteriormente." if es_reset else ""}
-        
-        Devuelve ÚNICAMENTE un arreglo JSON estricto con esta estructura:
-        [
-            {{
-                "titulo": "Título de la noticia",
-                "medio": "Nombre del medio o revista",
-                "url": "URL válida del artículo",
-                "resumen_corto": "Resumen corto de 2 líneas."
-            }}
-        ]
-        """
-        response = model.generate_content(prompt)
-        text_clean = re.sub(r'```json\s*|```\s*', '', response.text).strip()
-        return json.loads(text_clean)
-    except Exception as e:
-        print(f"Aviso en búsqueda: {e}")
-        return noticias_seleccionadas
+    seed_prompt = f"Timestamp: {int(time.time())}"
+    prompt = f"""
+    Busca o proporciona 3 noticias REALES Y RECIENTES publicadas {rango_fechas_str} sobre negocios, empresas, economía, emprendimiento o administración en Ecuador y Latinoamérica.
+    Fuentes permitidas: Forbes Ecuador, Revista Ekos, Harvard Business Review, Bloomberg Línea, América Economía, El Economista, Diario Expansión.
+    ({seed_prompt})
+    {"IMPORTANTE: Muestra noticias completamente distintas a las obtenidas anteriormente." if es_reset else ""}
+    
+    Devuelve ÚNICAMENTE un arreglo JSON estricto con esta estructura:
+    [
+        {{
+            "titulo": "Título de la noticia",
+            "medio": "Nombre del medio o revista",
+            "url": "URL válida del artículo",
+            "resumen_corto": "Resumen corto de 2 líneas."
+        }}
+    ]
+    """
+    resp_texto = generar_contenido_seguro(prompt)
+    if resp_texto:
+        try:
+            text_clean = re.sub(r'```json\s*|```\s*', '', resp_texto).strip()
+            return json.loads(text_clean)
+        except Exception:
+            pass
+
+    return noticias_seleccionadas
 
 # ==============================================================================
 # [SECCIÓN 4 - CAPTURA OPTIMIZADA DEL ENCABEZADO ESPECÍFICO DEL ARTÍCULO]
@@ -113,14 +131,12 @@ async def capturar_y_extraer_noticia(url: str, output_path: str = "temp_header.p
         )
         page = await context.new_page()
         try:
-            # Forzar respaldo si la URL es genérica
             if not url or url in ["https://www.forbes.com", "https://www.forbes.com.ec", "https://www.ekosnegocios.com"]:
                 url = "https://www.forbes.com.ec/brandvoice/esta-red-construye-futuro-digital-negocios-ecuador-movistar-empresas-n74962"
 
             await page.goto(url, wait_until="domcontentloaded", timeout=25000)
             await page.wait_for_timeout(3000)
 
-            # Intentar ubicar el encabezado del artículo (h1 o imagen destacada) para asegurar el recorte correcto
             try:
                 h1_selector = page.locator("h1").first
                 if await h1_selector.is_visible():
@@ -128,13 +144,11 @@ async def capturar_y_extraer_noticia(url: str, output_path: str = "temp_header.p
             except Exception:
                 pass
 
-            # Capturar la sección superior precisa donde figura el logo, la imagen principal y el título
             await page.screenshot(
                 path=output_path, 
                 clip={"x": 0, "y": 0, "width": 1280, "height": 650}
             )
 
-            # Extraer párrafos de texto reales del cuerpo de la noticia
             parrafos = await page.eval_on_selector_all("article p, .article-body p, main p", "elements => elements.map(e => e.innerText)")
             if parrafos:
                 texto_extraido = "\n\n".join([p.strip() for p in parrafos if len(p.strip()) > 30])
@@ -157,24 +171,21 @@ async def procesar_noticia(payload: NoticiaRequest):
         img_path = datos["imagen"]
         texto_raw = datos["texto"]
 
-        # Generar o ajustar estrictamente a EXACTAMENTE 410 palabras mediante Gemini AI
-        if GEMINI_API_KEY:
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            prompt_noticia = f"""
-            Actúa como un redactor periodístico de negocios académico.
-            Toma como base el título '{payload.titulo}' y el contexto extraído de la noticia web.
-            
-            REGLA ESTRICTA E INNEGOCIABLE:
-            Redacta/Sintetiza el contenido completo de esta noticia de negocios para que tenga EXACTAMENTE ENTRE 400 Y 420 PALABRAS (Objetivo estricto: 410 palabras).
-            Debe ser un texto profesional, fluido y completo que cubra todo el contexto del artículo para ser impreso en un formato físico de 23x16 cm.
-            Devuelve ÚNICAMENTE el texto periodístico en párrafos continuos, sin títulos ni introducciones.
+        prompt_noticia = f"""
+        Actúa como un redactor periodístico de negocios académico.
+        Toma como base el título '{payload.titulo}' y el contexto extraído de la noticia web.
+        
+        REGLA ESTRICTA E INNEGOCIABLE:
+        Redacta/Sintetiza el contenido completo de esta noticia de negocios para que tenga EXACTAMENTE ENTRE 400 Y 420 PALABRAS (Objetivo estricto: 410 palabras).
+        Debe ser un texto profesional, fluido y completo que cubra todo el contexto del artículo para ser impreso en un formato físico de 23x16 cm.
+        Devuelve ÚNICAMENTE el texto periodístico en párrafos continuos, sin títulos ni introducciones.
 
-            Texto extraído de referencia:
-            {texto_raw if len(texto_raw) > 50 else 'Noticia sobre innovación empresarial, transformación digital, inversión en PYMES y estrategias de negocios.'}
-            """
-            resp_noticia = model.generate_content(prompt_noticia)
-            texto_final_impresion = resp_noticia.text.strip()
-        else:
+        Texto extraído de referencia:
+        {texto_raw if len(texto_raw) > 50 else 'Noticia sobre innovación empresarial, transformación digital, inversión en PYMES y estrategias de negocios.'}
+        """
+
+        texto_final_impresion = generar_contenido_seguro(prompt_noticia)
+        if not texto_final_impresion or len(texto_final_impresion.split()) < 100:
             texto_final_impresion = (
                 "Ecuador vive una transformación silenciosa pero imparable en el sector empresarial. Las pequeñas y medianas empresas, "
                 "que representan el músculo más dinámico del aparato productivo nacional, están cada vez más conectadas, siendo más eficientes "
