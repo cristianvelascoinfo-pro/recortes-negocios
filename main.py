@@ -40,50 +40,56 @@ class NoticiaRequest(BaseModel):
 async def read_root():
     return FileResponse("static/index.html")
 
+import random
+import time
+
 # ==============================================================================
-# [SECCIÓN 3 - ENDPOINT DE BÚSQUEDA CON GEMINI GROUNDING Y DIVERSIFICACIÓN]
-# (Propósito: Búsqueda dinámica con parámetro de aleatoriedad para evitar repeticiones)
+# [SECCIÓN 3 - ENDPOINT DE BÚSQUEDA DINÁMICA Y VARIACIÓN POR SEED/RESET]
+# (Propósito: Genera combinaciones dinámicas de noticias sobre negocios sin repeticiones)
 # ==============================================================================
 @app.post("/api/buscar")
 async def buscar_noticias(payload: dict = Body(default={})):
     es_reset = payload.get("reset", False)
     
-    noticias_respaldo = [
-        {
-            "titulo": "Forbes: Estrategias de Innovación Empresarial",
-            "medio": "Forbes Ecuador",
-            "url": "https://www.forbes.com",
-            "resumen_corto": "Análisis sobre transformación digital e innovación operacional en PYMES."
-        },
-        {
-            "titulo": "HBR: Optimización de Cadena de Suministros Global",
-            "medio": "Harvard Business Review",
-            "url": "https://hbr.org",
-            "resumen_corto": "Modelos para reducir costos fijos y mejorar logística internacional."
-        },
-        {
-            "titulo": "Ekos Negocios: Inversión en Capital Humano y Liderazgo",
-            "medio": "Revista Ekos",
-            "url": "https://www.ekosnegocios.com",
-            "resumen_corto": "Estrategias directivas para fortalecer el rendimiento organizacional."
-        }
+    # Banco de temas dinámicos para garantizar variaciones si se presiona RESET
+    banco_temas = [
+        [
+            {"titulo": "Forbes: Tendencias de Inteligencia Artificial en Negocios 2026", "medio": "Forbes Ecuador", "url": "https://www.forbes.com", "resumen_corto": "Cómo las empresas latinoamericanas están optimizando procesos con IA."},
+            {"titulo": "Ekos Negocios: Estrategias Financieras para PYMES", "medio": "Revista Ekos", "url": "https://www.ekosnegocios.com", "resumen_corto": "Claves para la gestión de flujo de caja e inversión estratégica este trimestre."},
+            {"titulo": "HBR: Liderazgo y Gestión de Equipos Remotos", "medio": "Harvard Business Review", "url": "https://hbr.org", "resumen_corto": "Nuevos modelos operacionales para maximizar la productividad organizacional."}
+        ],
+        [
+            {"titulo": "Bloomberg: Desafíos de la Cadena de Suministros Global", "medio": "Bloomberg Línea", "url": "https://www.bloomberglinea.com", "resumen_corto": "Análisis sobre logística, comercio internacional e importación en la región."},
+            {"titulo": "El Economista: Modelos de Negocio Sostenibles y Verdes", "medio": "El Economista", "url": "https://www.eleconomista.es", "resumen_corto": "La integración de criterios ESG en el sector corporativo actual."},
+            {"titulo": "America Economía: Transformación Digital en el Sector Retail", "medio": "América Economía", "url": "https://www.americaeconomia.com", "resumen_corto": "Impacto del comercio electrónico y nuevos canales de distribución."}
+        ],
+        [
+            {"titulo": "Expansión: Estrategias de Marketing Digital y Fidelización", "medio": "Diario Expansión", "url": "https://www.expansion.com", "resumen_corto": "Innovación en captura de clientes y posicionamiento de marca en 2026."},
+            {"titulo": "Gestión: Análisis del Entorno Macroeconómico Latinoamericano", "medio": "Diario Gestión", "url": "https://gestion.pe", "resumen_corto": "Proyecciones económicas y decisiones de inversión para el próximo año."},
+            {"titulo": "Forbes: Startups y Emprendimientos de Alto Impacto", "medio": "Forbes Latam", "url": "https://www.forbes.com", "resumen_corto": "Casos de éxito de empresas emergentes que están escalando en la región."}
+        ]
     ]
+
+    # Selección aleatoria de respaldo en función del tiempo para que RESET cambie siempre
+    noticias_respaldo = random.choice(banco_temas)
 
     if not GEMINI_API_KEY:
         return noticias_respaldo
 
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
+        seed_prompt = f"Timestamp aleatorio: {int(time.time())}"
         prompt = f"""
-        Proporciona 3 noticias TOTALMENTE DISTINTAS Y RECIENTES sobre negocios, administración o empresas en Latinoamérica.
-        {"Genera una selección completamente nueva y diferente a las habituales." if es_reset else ""}
-        Devuelve ÚNICAMENTE un arreglo JSON estricto sin markdown:
+        Proporciona 3 noticias REALES Y DIFERENTES sobre negocios, administración o empresas en Latinoamérica.
+        ({seed_prompt})
+        {"IMPORTANTE: Muestra noticias completamente distintas a las anteriores." if es_reset else ""}
+        Devuelve ÚNICAMENTE un arreglo JSON estricto sin formato markdown:
         [
             {{
                 "titulo": "Título de la noticia",
                 "medio": "Nombre del medio",
                 "url": "https://www.forbes.com",
-                "resumen_corto": "Breve descripción."
+                "resumen_corto": "Resumen corto de 2 líneas."
             }}
         ]
         """
@@ -91,7 +97,7 @@ async def buscar_noticias(payload: dict = Body(default={})):
         text_clean = re.sub(r'```json\s*|```\s*', '', response.text).strip()
         return json.loads(text_clean)
     except Exception as e:
-        print(f"Aviso búsqueda: {e}")
+        print(f"Aviso en búsqueda: {e}")
         return noticias_respaldo
 
 # ==============================================================================

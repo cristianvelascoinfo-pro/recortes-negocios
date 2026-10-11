@@ -1,6 +1,6 @@
 /* ==============================================================================
    [SECCIÓN 1 - CÁLCULO DE FECHA Y CONFIGURACIÓN INICIAL]
-   (Propósito: Calcula la semana académica actual y asigna eventos a botones)
+   (Propósito: Calcula el número de recorte exacto según semanas fijadas desde el Lunes 28 de Septiembre 2026)
    ============================================================================== */
 document.addEventListener("DOMContentLoaded", () => {
     const numRecorteInput = document.getElementById("numRecorte");
@@ -13,13 +13,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let archivoGeneradoUrl = "";
 
-    // Auto-cálculo de número de recorte por semanas
+    // Lunes 28 de Septiembre de 2026 = Recorte N° 1
+    // Lunes 05 de Octubre de 2026 al Lunes 12 de Octubre de 2026 = Recorte N° 2
     function calcularNumeroRecorte() {
-        const fechaInicioSemestre = new Date("2026-09-01"); // Inicio del periodo lectivo
+        const fechaInicioSemana1 = new Date("2026-09-28T00:00:00");
         const fechaActual = new Date();
-        const diferenciaMilisegundos = fechaActual - fechaInicioSemestre;
-        const semanasTranscurridas = Math.floor(diferenciaMilisegundos / (1000 * 60 * 60 * 24 * 7)) + 1;
-        numRecorteInput.value = semanasTranscurridas > 0 ? semanasTranscurridas : 1;
+        
+        const diferenciaMilisegundos = fechaActual - fechaInicioSemana1;
+        const diasTranscurridos = Math.floor(diferenciaMilisegundos / (1000 * 60 * 60 * 24));
+        const numeroRecorte = Math.floor(diasTranscurridos / 7) + 1;
+
+        numRecorteInput.value = numeroRecorte > 0 ? numeroRecorte : 1;
     }
     calcularNumeroRecorte();
 
