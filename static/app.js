@@ -1,6 +1,6 @@
 /* ==============================================================================
-   [SECCIÓN 1 - CÁLCULO DE FECHA Y CONFIGURACIÓN INICIAL]
-   (Propósito: Calcula el número de recorte exacto según semanas fijadas desde el Lunes 28 de Septiembre 2026)
+   [SECCIÓN 1 - CONFIGURACIÓN INICIAL Y CÁLCULO DE RECORTE SEMANAL]
+   (Propósito: Calcula la semana académica actual y asigna eventos principales)
    ============================================================================== */
 document.addEventListener("DOMContentLoaded", () => {
     const numRecorteInput = document.getElementById("numRecorte");
@@ -14,22 +14,19 @@ document.addEventListener("DOMContentLoaded", () => {
     let archivoGeneradoUrl = "";
 
     // Lunes 28 de Septiembre de 2026 = Recorte N° 1
-    // Lunes 05 de Octubre de 2026 al Lunes 12 de Octubre de 2026 = Recorte N° 2
     function calcularNumeroRecorte() {
         const fechaInicioSemana1 = new Date("2026-09-28T00:00:00");
         const fechaActual = new Date();
-        
         const diferenciaMilisegundos = fechaActual - fechaInicioSemana1;
         const diasTranscurridos = Math.floor(diferenciaMilisegundos / (1000 * 60 * 60 * 24));
         const numeroRecorte = Math.floor(diasTranscurridos / 7) + 1;
-
         numRecorteInput.value = numeroRecorte > 0 ? numeroRecorte : 1;
     }
     calcularNumeroRecorte();
 
     /* ==============================================================================
-       [SECCIÓN 2 - PETICIÓN DE BÚSQUEDA Y BOTÓN RESET]
-       (Propósito: Llama al backend con opción de refrescar resultados si no convencen)
+       [SECCIÓN 2 - PETICIÓN DE BÚSQUEDA MULTIFUENTE Y RENDERIZADO DE TARJETAS]
+       (Propósito: Llama al endpoint /api/buscar y dibuja las tarjetas con miniatura y fuente)
        ============================================================================== */
     async function realizarBusqueda(esReset = false) {
         btnBuscar.disabled = true;
@@ -43,7 +40,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const response = await fetch("/api/buscar", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ reset: esReset })
+                body: JSON.stringify({ reset: esReset, timestamp: Date.now() })
             });
             const noticias = await response.json();
 
@@ -54,19 +51,21 @@ document.addEventListener("DOMContentLoaded", () => {
             btnReset.innerText = "🔄 RESETEAR Y BUSCAR NUEVAS";
 
             if (!noticias || noticias.length === 0) {
-                alert("No se encontraron noticias. Intenta de nuevo.");
+                alert("No se encontraron noticias. Inténtalo de nuevo.");
                 return;
             }
 
             noticias.forEach((noticia, index) => {
                 const card = document.createElement("div");
                 card.className = "news-card";
-                card.id = `card-${index}`;
                 card.innerHTML = `
-                    <div class="source">${noticia.medio || 'MEDIO DIGITAL'}</div>
-                    <h3>${noticia.titulo}</h3>
-                    <p>${noticia.resumen_corto}</p>
-                    <button class="btn-neon btn-seleccionar" style="width: 100%; margin-top: 1rem;">SELECCIONAR NOTICIA ${index + 1}</button>
+                    <img src="${noticia.imagen_url || 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&auto=format&fit=crop&q=80'}" alt="Imagen noticia">
+                    <div class="news-card-content">
+                        <div class="source">📰 FUENTE: ${noticia.medio || 'MEDIO DIGITAL'}</div>
+                        <h3>${noticia.titulo}</h3>
+                        <p>${noticia.resumen_corto}</p>
+                        <button class="btn-neon btn-seleccionar" style="width: 100%;">SELECCIONAR NOTICIA ${index + 1}</button>
+                    </div>
                 `;
 
                 const btnSel = card.querySelector(".btn-seleccionar");
@@ -91,17 +90,16 @@ document.addEventListener("DOMContentLoaded", () => {
     btnReset.addEventListener("click", () => realizarBusqueda(true));
 
     /* ==============================================================================
-       [SECCIÓN 3 - SELECCIÓN, OCULTAMIENTO Y DESPLIEGUE DE GUÍA DE SUBRAYADO]
-       (Propósito: Oculta las tarjetas no elegidas y muestra la guía visual con glosario)
+       [SECCIÓN 3 - SELECCIÓN, OCULTAMIENTO Y PROCESAMIENTO DE LA NOTICIA]
+       (Propósito: Oculta tarjetas no elegidas y despliega la guía de subrayado, análisis y glosario)
        ============================================================================== */
     async function seleccionarYProcesar(noticia, indiceElegido) {
-        // Desaparecer las otras tarjetas no seleccionadas de la pantalla
         const cards = document.querySelectorAll(".news-card");
         cards.forEach((card, idx) => {
             if (idx !== indiceElegido) {
-                card.style.transition = "all 0.5s ease";
+                card.style.transition = "all 0.4s ease";
                 card.style.opacity = "0";
-                setTimeout(() => card.remove(), 500);
+                setTimeout(() => card.remove(), 400);
             }
         });
 
@@ -111,7 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
         btnDescargar.style.opacity = "0.5";
         btnDescargar.innerText = "⏳ GENERANDO DOCUMENTO Y GUÍA DE SUBRAYADO...";
 
-        tabContent.innerHTML = "<p style='color: var(--primary-neon);'>⏳ Extrayendo noticia, generando resaltado de frases clave y redactando análisis de 15 líneas...</p>";
+        tabContent.innerHTML = "<p style='color: var(--primary-neon);'>⏳ Procesando noticia seleccionada, aplicando formato Times New Roman 10pt y redactando ~410 palabras...</p>";
 
         try {
             const response = await fetch("/api/procesar", {
@@ -142,7 +140,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 tabContent.innerHTML = `
                     <h3 style="color: var(--primary-neon);">🖍️ 1. GUÍA PARA SUBRAYAR FÍSICAMENTE EN TU HOJA IMPRESA:</h3>
-                    <p style="margin-top: 0.5rem; line-height: 1.8; background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px;">
+                    <p style="margin-top: 0.5rem; line-height: 1.8; background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px; text-align: justify;">
                         ${resultado.texto_subrayado}
                     </p>
                     <br>
@@ -163,8 +161,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     /* ==============================================================================
-       [SECCIÓN 4 - EVENTO DE DESCARGA DE DOCUMENTO]
-       (Propósito: Descarga el archivo Word final estructurado)
+       [SECCIÓN 4 - DESCARGA DEL DOCUMENTO WORD COMPILADO]
+       (Propósito: Descarga el archivo .docx listo para imprimir)
        ============================================================================== */
     btnDescargar.addEventListener("click", () => {
         if (archivoGeneradoUrl) {
