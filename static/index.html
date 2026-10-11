@@ -2,70 +2,58 @@
 <html lang="es">
 <head>
     <!-- ==============================================================================
-         [INICIO SECCIÓN 1 - METADATOS Y VÍNCULOS DE ESTILO]
+         [SECCIÓN 1 - METADATOS Y VÍNCULOS DE ESTILO]
          (Propósito: Configuración de codificación UTF-8, responsividad y archivo CSS)
          ============================================================================== -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Generador de Recortes Académicos | Negocios</title>
     <link rel="stylesheet" href="/static/styles.css">
-    <!-- ==============================================================================
-         [FIN SECCIÓN 1 - METADATOS Y VÍNCULOS DE ESTILO]
-         ============================================================================== -->
 </head>
 <body>
 
     <div class="container">
         <!-- ==============================================================================
-             [INICIO SECCIÓN 2 - CABECERA PRINCIPAL]
+             [SECCIÓN 2 - CABECERA PRINCIPAL]
              (Propósito: Título y subtítulo con estilo cibernético)
              ============================================================================== -->
         <header>
             <h1>AUTOMATIZADOR DE RECORTES DE NEGOCIOS</h1>
             <p>Plataforma Inteligente de Extracción, Análisis e Impresión Académica</p>
         </header>
-        <!-- ==============================================================================
-             [FIN SECCIÓN 2 - CABECERA PRINCIPAL]
-             ============================================================================== -->
 
         <!-- ==============================================================================
-             [INICIO SECCIÓN 3 - CONTROLES Y PARÁMETROS DE ENTRADA]
-             (Propósito: Inputs para Número de Recorte y botón de búsqueda de noticias en vivo)
+             [SECCIÓN 3 - CONTROLES, NÚMERO DE RECORTE AUTO Y BOTÓN RESET]
+             (Propósito: Cálculo automático de semana, búsqueda e historial de actualización)
              ============================================================================== -->
         <div class="controls-panel">
             <div class="input-group">
-                <label for="numRecorte">Número de Recorte Actual:</label>
-                <input type="number" id="numRecorte" value="2" min="1">
+                <label for="numRecorte">Número de Recorte Actual (Auto-calculado por fecha):</label>
+                <input type="number" id="numRecorte" min="1" readonly style="background: rgba(0, 242, 254, 0.1); color: var(--primary-neon); font-weight: bold;">
             </div>
 
-            <button id="btnBuscar" class="btn-neon">🔍 BUSCAR 3 NOTICIAS EN VIVO</button>
+            <div style="display: flex; gap: 10px;">
+                <button id="btnBuscar" class="btn-neon">🔍 BUSCAR 3 NOTICIAS EN VIVO</button>
+                <button id="btnReset" class="btn-neon" style="background: linear-gradient(135deg, #ff416c, #8a2387); display: none;">🔄 RESETEAR Y BUSCAR NUEVAS</button>
+            </div>
         </div>
-        <!-- ==============================================================================
-             [FIN SECCIÓN 3 - CONTROLES Y PARÁMETROS DE ENTRADA]
-             ============================================================================== -->
 
         <!-- ==============================================================================
-             [INICIO SECCIÓN 4 - REJILLA DE TARJETAS TIPO GOOGLE PREVIEW]
-             (Propósito: Contenedor dinámico donde se desplegarán las 3 noticias encontradas)
+             [SECCIÓN 4 - REJILLA DE TARJETAS TIPO GOOGLE PREVIEW]
+             (Propósito: Contenedor dinámico donde se desplegarán las noticias encontradas)
              ============================================================================== -->
         <div id="newsGrid" class="news-grid"></div>
-        <!-- ==============================================================================
-             [FIN SECCIÓN 4 - REJILLA DE TARJETAS TIPO GOOGLE PREVIEW]
-             ============================================================================== -->
 
         <!-- ==============================================================================
-             [INICIO SECCIÓN 5 - PANEL DE RESULTADOS Y DESCARGA .DOCX]
-             (Propósito: Muestra el resumen generado, análisis de 15 líneas y botón para descargar el Word)
+             [SECCIÓN 5 - PANEL DE RESULTADOS, TEXTO RESALTADO Y GLOSARIO]
+             (Propósito: Muestra el texto guía para subrayar, análisis de 15 líneas y glosario de 5 palabras)
              ============================================================================== -->
         <div id="resultsPanel" class="results-panel">
-            <h2>⚡ TRABAJO GENERADO EXITOSAMENTE</h2>
+            <h2>⚡ GUÍA DE SUBRAYADO FÍSICO Y TRABAJO GENERADO</h2>
             <div id="tabContent" class="tab-content"></div>
             <br>
             <button id="btnDescargar" class="btn-neon" style="width: 100%;">📥 DESCARGAR DOCUMENTO WORD (.DOCX) LISTO PARA IMPRIMIR</button>
         </div>
-        <!-- ==============================================================================
-             [FIN SECCIÓN 5 - PANEL DE RESULTADOS Y DESCARGA .DOCX]
-             ============================================================================== -->
     </div>
 
     <!-- Script de control dinámico -->

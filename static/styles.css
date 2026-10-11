@@ -179,8 +179,8 @@ header p {
    ============================================================================== */
 
 /* ==============================================================================
-   [INICIO SECCIÓN 5 - PANEL DE RESULTADOS Y DESCARGA]
-   (Propósito: Vista previa del trabajo generado, pestañas y botón de descarga .docx)
+   [SECCIÓN 5 - PANEL DE RESULTADOS Y DESCARGA]
+   (Propósito: Vista previa del trabajo generado, pestañas y resplandor de subrayado)
    ============================================================================== */
 .results-panel {
     background: var(--card-bg);
@@ -188,7 +188,7 @@ header p {
     border: 1px solid var(--border-glass);
     border-radius: 16px;
     padding: 2rem;
-    display: none; /* Se activa dinámicamente con JavaScript */
+    display: none;
 }
 
 .results-panel.active {
@@ -202,6 +202,21 @@ header p {
     margin-top: 1rem;
     border: 1px solid rgba(255, 255, 255, 0.05);
 }
-/* ==============================================================================
-   [FIN SECCIÓN 5 - PANEL DE RESULTADOS Y DESCARGA]
-   ============================================================================== */
+
+/* Subrayado neón para la guía física de estudio */
+mark.highlight-neon {
+    background-color: rgba(255, 230, 0, 0.35);
+    color: #ffffff;
+    border-bottom: 2px solid #ffe600;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-weight: 600;
+}
+
+.glosario-card {
+    background: rgba(20, 28, 45, 0.8);
+    border-left: 4px solid var(--primary-neon);
+    padding: 1rem;
+    margin-top: 1rem;
+    border-radius: 0 8px 8px 0;
+}

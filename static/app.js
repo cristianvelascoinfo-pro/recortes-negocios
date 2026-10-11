@@ -1,9 +1,11 @@
 /* ==============================================================================
-   [SECCIÓN 1 - CONFIGURACIÓN DE ELEMENTOS Y EVENTOS INICIALES]
-   (Propósito: Captura los elementos del DOM y asigna eventos principales)
+   [SECCIÓN 1 - CÁLCULO DE FECHA Y CONFIGURACIÓN INICIAL]
+   (Propósito: Calcula la semana académica actual y asigna eventos a botones)
    ============================================================================== */
 document.addEventListener("DOMContentLoaded", () => {
+    const numRecorteInput = document.getElementById("numRecorte");
     const btnBuscar = document.getElementById("btnBuscar");
+    const btnReset = document.getElementById("btnReset");
     const newsGrid = document.getElementById("newsGrid");
     const resultsPanel = document.getElementById("resultsPanel");
     const tabContent = document.getElementById("tabContent");
@@ -11,32 +13,51 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let archivoGeneradoUrl = "";
 
+    // Auto-cálculo de número de recorte por semanas
+    function calcularNumeroRecorte() {
+        const fechaInicioSemestre = new Date("2026-09-01"); // Inicio del periodo lectivo
+        const fechaActual = new Date();
+        const diferenciaMilisegundos = fechaActual - fechaInicioSemestre;
+        const semanasTranscurridas = Math.floor(diferenciaMilisegundos / (1000 * 60 * 60 * 24 * 7)) + 1;
+        numRecorteInput.value = semanasTranscurridas > 0 ? semanasTranscurridas : 1;
+    }
+    calcularNumeroRecorte();
+
     /* ==============================================================================
-       [SECCIÓN 2 - PETICIÓN DE BÚSQUEDA DE NOTICIAS AL BACKEND]
-       (Propósito: Llama al endpoint /api/buscar y renderiza las 3 tarjetas estilo Google Preview)
+       [SECCIÓN 2 - PETICIÓN DE BÚSQUEDA Y BOTÓN RESET]
+       (Propósito: Llama al backend con opción de refrescar resultados si no convencen)
        ============================================================================== */
-    btnBuscar.addEventListener("click", async () => {
+    async function realizarBusqueda(esReset = false) {
         btnBuscar.disabled = true;
-        btnBuscar.innerText = "⏳ BUSCANDO NOTICIAS EN VIVO...";
+        btnReset.disabled = true;
+        btnBuscar.innerText = esReset ? "⏳ REFRESCANDO OPCIONES..." : "⏳ BUSCANDO NOTICIAS EN VIVO...";
         newsGrid.innerHTML = "";
         resultsPanel.classList.remove("active");
         archivoGeneradoUrl = "";
 
         try {
-            const response = await fetch("/api/buscar", { method: "POST" });
+            const response = await fetch("/api/buscar", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ reset: esReset })
+            });
             const noticias = await response.json();
 
             btnBuscar.disabled = false;
+            btnReset.disabled = false;
+            btnReset.style.display = "inline-block";
             btnBuscar.innerText = "🔍 BUSCAR 3 NOTICIAS EN VIVO";
+            btnReset.innerText = "🔄 RESETEAR Y BUSCAR NUEVAS";
 
             if (!noticias || noticias.length === 0) {
-                alert("No se encontraron noticias recientes. Inténtalo de nuevo.");
+                alert("No se encontraron noticias. Intenta de nuevo.");
                 return;
             }
 
             noticias.forEach((noticia, index) => {
                 const card = document.createElement("div");
                 card.className = "news-card";
+                card.id = `card-${index}`;
                 card.innerHTML = `
                     <div class="source">${noticia.medio || 'MEDIO DIGITAL'}</div>
                     <h3>${noticia.titulo}</h3>
@@ -44,37 +65,49 @@ document.addEventListener("DOMContentLoaded", () => {
                     <button class="btn-neon btn-seleccionar" style="width: 100%; margin-top: 1rem;">SELECCIONAR NOTICIA ${index + 1}</button>
                 `;
 
-                const btnSeleccionar = card.querySelector(".btn-seleccionar");
-                btnSeleccionar.addEventListener("click", (e) => {
+                const btnSel = card.querySelector(".btn-seleccionar");
+                btnSel.addEventListener("click", (e) => {
                     e.stopPropagation();
-                    procesarNoticia(noticia);
+                    seleccionarYProcesar(noticia, index);
                 });
 
-                card.addEventListener("click", () => procesarNoticia(noticia));
+                card.addEventListener("click", () => seleccionarYProcesar(noticia, index));
                 newsGrid.appendChild(card);
             });
 
         } catch (error) {
-            console.error("Error al buscar noticias:", error);
-            alert("Ocurrió un error al conectar con el motor de búsqueda.");
+            console.error("Error al buscar:", error);
             btnBuscar.disabled = false;
+            btnReset.disabled = false;
             btnBuscar.innerText = "🔍 BUSCAR 3 NOTICIAS EN VIVO";
         }
-    });
+    }
+
+    btnBuscar.addEventListener("click", () => realizarBusqueda(false));
+    btnReset.addEventListener("click", () => realizarBusqueda(true));
 
     /* ==============================================================================
-       [SECCIÓN 3 - PROCESAMIENTO DE NOTICIA SELECCIONADA Y GENERACIÓN WORD]
-       (Propósito: Envia la noticia elegida al backend para generar el resumen, análisis y .docx)
+       [SECCIÓN 3 - SELECCIÓN, OCULTAMIENTO Y DESPLIEGUE DE GUÍA DE SUBRAYADO]
+       (Propósito: Oculta las tarjetas no elegidas y muestra la guía visual con glosario)
        ============================================================================== */
-    async function procesarNoticia(noticia) {
-        const numRecorte = document.getElementById("numRecorte").value || 2;
+    async function seleccionarYProcesar(noticia, indiceElegido) {
+        // Desaparecer las otras tarjetas no seleccionadas de la pantalla
+        const cards = document.querySelectorAll(".news-card");
+        cards.forEach((card, idx) => {
+            if (idx !== indiceElegido) {
+                card.style.transition = "all 0.5s ease";
+                card.style.opacity = "0";
+                setTimeout(() => card.remove(), 500);
+            }
+        });
 
+        const numRecorte = numRecorteInput.value;
         resultsPanel.classList.add("active");
         btnDescargar.disabled = true;
         btnDescargar.style.opacity = "0.5";
-        btnDescargar.innerText = "⏳ GENERANDO DOCUMENTO WORD...";
+        btnDescargar.innerText = "⏳ GENERANDO DOCUMENTO Y GUÍA DE SUBRAYADO...";
 
-        tabContent.innerHTML = "<p style='color: var(--primary-neon);'>⏳ Procesando noticia con Gemini AI, tomando captura HD del encabezado y creando el documento Word...</p>";
+        tabContent.innerHTML = "<p style='color: var(--primary-neon);'>⏳ Extrayendo noticia, generando resaltado de frases clave y redactando análisis de 15 líneas...</p>";
 
         try {
             const response = await fetch("/api/procesar", {
@@ -95,25 +128,39 @@ document.addEventListener("DOMContentLoaded", () => {
                 btnDescargar.style.opacity = "1";
                 btnDescargar.innerText = "📥 DESCARGAR DOCUMENTO WORD (.DOCX) LISTO PARA IMPRIMIR";
 
+                let glosarioHtml = resultado.glosario.map(g => `
+                    <div class="glosario-card">
+                        <strong>📌 ${g.palabra}:</strong> ${g.definición}<br>
+                        <small style="color: var(--primary-neon);"><em>Sinónimos:</em> ${g.sinonimos}</small><br>
+                        <small style="color: #ff416c;"><em>Antónimos:</em> ${g.antonimos}</small>
+                    </div>
+                `).join("");
+
                 tabContent.innerHTML = `
-                    <h3>✅ Vista Previa del Análisis (15 Líneas):</h3>
-                    <p style="margin-top: 1rem; line-height: 1.6;">${resultado.analisis}</p>
+                    <h3 style="color: var(--primary-neon);">🖍️ 1. GUÍA PARA SUBRAYAR FÍSICAMENTE EN TU HOJA IMPRESA:</h3>
+                    <p style="margin-top: 0.5rem; line-height: 1.8; background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px;">
+                        ${resultado.texto_subrayado}
+                    </p>
+                    <br>
+                    <h3 style="color: var(--primary-neon);">📊 2. ANÁLISIS ACADÉMICO DE LA NOTICIA (15 LÍNEAS / ~177 PALABRAS):</h3>
+                    <p style="margin-top: 0.5rem; line-height: 1.6; text-align: justify;">${resultado.analisis}</p>
+                    <br>
+                    <h3 style="color: var(--primary-neon);">📚 3. GLOSARIO ACADÉMICO (5 PALABRAS CLAVE):</h3>
+                    ${glosarioHtml}
                 `;
             } else {
                 tabContent.innerHTML = `<p style="color: red;">Error al procesar: ${resultado.error}</p>`;
-                btnDescargar.innerText = "❌ ERROR AL GENERAR ARCHIVO";
             }
 
         } catch (error) {
-            console.error("Error al procesar la noticia:", error);
+            console.error("Error al procesar:", error);
             tabContent.innerHTML = "<p style='color: red;'>Error en el servidor al generar el informe.</p>";
-            btnDescargar.innerText = "❌ ERROR EN EL SERVIDOR";
         }
     }
 
     /* ==============================================================================
-       [SECCIÓN 4 - DESCARGA DEL ARCHIVO COMPILADO .DOCX]
-       (Propósito: Redirecciona para descargar el archivo Word listo para imprimir)
+       [SECCIÓN 4 - EVENTO DE DESCARGA DE DOCUMENTO]
+       (Propósito: Descarga el archivo Word final estructurado)
        ============================================================================== */
     btnDescargar.addEventListener("click", () => {
         if (archivoGeneradoUrl) {
