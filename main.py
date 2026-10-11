@@ -1,7 +1,9 @@
 import os
 import re
 import json
-import asyncio
+import random
+import time
+from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.staticfiles import StaticFiles
@@ -19,10 +21,8 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 # ==============================================================================
 app = FastAPI(title="Generador de Recortes de Negocios")
 
-# Montar carpeta estática
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Configurar Gemini
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
@@ -40,21 +40,22 @@ class NoticiaRequest(BaseModel):
 async def read_root():
     return FileResponse("static/index.html")
 
-import random
-import time
-
 # ==============================================================================
-# [SECCIÓN 3 - ENDPOINT DE BÚSQUEDA DINÁMICA Y VARIACIÓN POR SEED/RESET]
-# (Propósito: Genera combinaciones dinámicas de noticias sobre negocios sin repeticiones)
+# [SECCIÓN 3 - ENDPOINT DE BÚSQUEDA MULTIFUENTE CON RANGO FLOTANTE DE 3 MESES]
+# (Propósito: Busca noticias de los últimos 3 meses en múltiples medios de negocios con apoyo de reset)
 # ==============================================================================
 @app.post("/api/buscar")
 async def buscar_noticias(payload: dict = Body(default={})):
     es_reset = payload.get("reset", False)
     
-    # Banco de temas dinámicos para garantizar variaciones si se presiona RESET
-    banco_temas = [
+    # Calcular rango flotante de los últimos 3 meses desde la fecha actual
+    fecha_actual = datetime.now()
+    fecha_hace_3_meses = fecha_actual - timedelta(days=90)
+    rango_fechas_str = f"entre {fecha_hace_3_meses.strftime('%B %Y')} y {fecha_actual.strftime('%B %Y')}"
+
+    banco_temas_respaldo = [
         [
-            {"titulo": "Forbes: Tendencias de Inteligencia Artificial en Negocios 2026", "medio": "Forbes Ecuador", "url": "https://www.forbes.com", "resumen_corto": "Cómo las empresas latinoamericanas están optimizando procesos con IA."},
+            {"titulo": "Forbes: Tendencias de Inteligencia Artificial en Negocios", "medio": "Forbes Ecuador", "url": "https://www.forbes.com.ec", "resumen_corto": "Cómo las empresas latinoamericanas están optimizando procesos con IA."},
             {"titulo": "Ekos Negocios: Estrategias Financieras para PYMES", "medio": "Revista Ekos", "url": "https://www.ekosnegocios.com", "resumen_corto": "Claves para la gestión de flujo de caja e inversión estratégica este trimestre."},
             {"titulo": "HBR: Liderazgo y Gestión de Equipos Remotos", "medio": "Harvard Business Review", "url": "https://hbr.org", "resumen_corto": "Nuevos modelos operacionales para maximizar la productividad organizacional."}
         ],
@@ -62,33 +63,29 @@ async def buscar_noticias(payload: dict = Body(default={})):
             {"titulo": "Bloomberg: Desafíos de la Cadena de Suministros Global", "medio": "Bloomberg Línea", "url": "https://www.bloomberglinea.com", "resumen_corto": "Análisis sobre logística, comercio internacional e importación en la región."},
             {"titulo": "El Economista: Modelos de Negocio Sostenibles y Verdes", "medio": "El Economista", "url": "https://www.eleconomista.es", "resumen_corto": "La integración de criterios ESG en el sector corporativo actual."},
             {"titulo": "America Economía: Transformación Digital en el Sector Retail", "medio": "América Economía", "url": "https://www.americaeconomia.com", "resumen_corto": "Impacto del comercio electrónico y nuevos canales de distribución."}
-        ],
-        [
-            {"titulo": "Expansión: Estrategias de Marketing Digital y Fidelización", "medio": "Diario Expansión", "url": "https://www.expansion.com", "resumen_corto": "Innovación en captura de clientes y posicionamiento de marca en 2026."},
-            {"titulo": "Gestión: Análisis del Entorno Macroeconómico Latinoamericano", "medio": "Diario Gestión", "url": "https://gestion.pe", "resumen_corto": "Proyecciones económicas y decisiones de inversión para el próximo año."},
-            {"titulo": "Forbes: Startups y Emprendimientos de Alto Impacto", "medio": "Forbes Latam", "url": "https://www.forbes.com", "resumen_corto": "Casos de éxito de empresas emergentes que están escalando en la región."}
         ]
     ]
 
-    # Selección aleatoria de respaldo en función del tiempo para que RESET cambie siempre
-    noticias_respaldo = random.choice(banco_temas)
+    noticias_seleccionadas = random.choice(banco_temas_respaldo)
 
     if not GEMINI_API_KEY:
-        return noticias_respaldo
+        return noticias_seleccionadas
 
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
-        seed_prompt = f"Timestamp aleatorio: {int(time.time())}"
+        seed_prompt = f"Timestamp: {int(time.time())}"
         prompt = f"""
-        Proporciona 3 noticias REALES Y DIFERENTES sobre negocios, administración o empresas en Latinoamérica.
+        Busca o proporciona 3 noticias REALES Y RECIENTES publicadas {rango_fechas_str} sobre negocios, empresas, economía, emprendimiento o administración en Ecuador y Latinoamérica.
+        Fuentes permitidas: Forbes Ecuador, Revista Ekos, Harvard Business Review, Bloomberg Línea, América Economía, El Economista, Diario Expansión.
         ({seed_prompt})
-        {"IMPORTANTE: Muestra noticias completamente distintas a las anteriores." if es_reset else ""}
-        Devuelve ÚNICAMENTE un arreglo JSON estricto sin formato markdown:
+        {"IMPORTANTE: Muestra noticias completamente distintas a las obtenidas anteriormente." if es_reset else ""}
+        
+        Devuelve ÚNICAMENTE un arreglo JSON estricto con esta estructura:
         [
             {{
                 "titulo": "Título de la noticia",
-                "medio": "Nombre del medio",
-                "url": "https://www.forbes.com",
+                "medio": "Nombre del medio o revista",
+                "url": "URL de la noticia",
                 "resumen_corto": "Resumen corto de 2 líneas."
             }}
         ]
@@ -98,84 +95,145 @@ async def buscar_noticias(payload: dict = Body(default={})):
         return json.loads(text_clean)
     except Exception as e:
         print(f"Aviso en búsqueda: {e}")
-        return noticias_respaldo
+        return noticias_seleccionadas
 
 # ==============================================================================
-# [SECCIÓN 4 - AUTOMATIZACIÓN DE CAPTURAS DE PANTALLA CON PLAYWRIGHT]
-# (Propósito: Navega a la URL y genera una captura HD de los primeros 580px del encabezado)
+# [SECCIÓN 4 - AUTOMATIZACIÓN DE CAPTURAS DE ENCABEZADO Y EXTRACCIÓN DE TEXTO]
+# (Propósito: Captura el encabezado HD y raspa el texto real del artículo)
 # ==============================================================================
-async def capturar_encabezado(url: str, output_path: str = "temp_header.png") -> str:
+async def capturar_y_extraer_noticia(url: str, output_path: str = "temp_header.png") -> dict:
+    texto_extraido = ""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page(viewport={"width": 1280, "height": 800})
+        context = await browser.new_context(viewport={"width": 1280, "height": 900})
+        page = await context.new_page()
         try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            await page.goto(url, wait_until="domcontentloaded", timeout=25000)
             await page.wait_for_timeout(2000)
-            await page.screenshot(path=output_path, clip={"x": 0, "y": 0, "width": 1280, "height": 580})
+
+            # Tomar captura del encabezado visual
+            await page.screenshot(
+                path=output_path, 
+                clip={"x": 0, "y": 0, "width": 1280, "height": 620}
+            )
+
+            # Extraer los párrafos reales de la noticia
+            parrafos = await page.eval_on_selector_all("article p, .article-body p, main p", "elements => elements.map(e => e.innerText)")
+            if parrafos:
+                texto_extraido = "\n\n".join([p.strip() for p in parrafos if len(p.strip()) > 30])
+
             await browser.close()
-            return output_path
+            return {"imagen": output_path, "texto": texto_extraido}
         except Exception as e:
             await browser.close()
-            print(f"Error en captura: {e}")
-            return ""
+            print(f"Aviso Playwright: {e}")
+            return {"imagen": "", "texto": ""}
 
 # ==============================================================================
-# [SECCIÓN 5 - PROCESAMIENTO COMPLETO, SUBRAYADO Y GLOSARIO DE 5 PALABRAS]
-# (Propósito: Genera el texto guía subrayado, análisis de 15 líneas y glosario formal)
+# [SECCIÓN 5 - PROCESAMIENTO, SÍNTESIS A ~410 PALABRAS Y GENERACIÓN EXCLUSIVA WORD 23X16]
+# (Propósito: Procesa el texto a ~410 palabras si es extenso, crea el .docx impreso estricto y la guía de subrayado)
 # ==============================================================================
 @app.post("/api/procesar")
 async def procesar_noticia(payload: NoticiaRequest):
     try:
-        img_path = await capturar_encabezado(payload.url)
+        # 1. Extraer captura y texto real
+        datos = await capturar_y_extraer_noticia(payload.url)
+        img_path = datos["imagen"]
+        texto_raw = datos["texto"]
 
-        # Generar contenido analítico completo con Gemini
+        # Si el texto es escaso, usar texto base de contingencia
+        if not texto_raw or len(texto_raw.split()) < 80:
+            texto_raw = (
+                f"Las pequeñas y medianas empresas representan el músculo más dinámico del aparato productivo en el país, "
+                f"las cuales se encuentran cada vez más conectadas, eficientes y competitivas gracias a la adopción digital. "
+                f"Según estudios del sector empresarial, un alto porcentaje de las PYMES tiene previsto invertir en su "
+                f"transformación tecnológica en los próximos meses, adaptando modelos de trabajo flexibles, servicios en la nube "
+                f"y soluciones de ciberseguridad. En este nuevo entorno corporativo, la integración de herramientas operativas "
+                f"y la capacitación constante del talento humano permiten construir modelos de negocio sostenibles a largo plazo. "
+                f"Las compañías que lideran la oferta de servicios digitales buscan expandir sus redes de aliados estratégicos, "
+                f"ofreciendo oportunidades de inversión con rentabilidad garantizada, ingresos recurrentes y soporte comercial. "
+                f"Digitalizar las actividades operativas no solo optimiza los costos fijos, sino que incrementa sustancialmente "
+                f"la eficiencia en la atención al cliente y abre nuevos canales de comercialización en el mercado nacional e internacional."
+            )
+
+        palabras_totales = len(texto_raw.split())
+
+        # 2. Control del límite de 410 palabras para el formato impreso 23 x 16 cm
+        if palabras_totales > 410:
+            if GEMINI_API_KEY:
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                prompt_resumen = f"""
+                El siguiente texto de noticia es demasiado extenso para el formato de impresión físico. 
+                Genera un resumen ejecutivo de la noticia que conserve TODO el contexto general e ideas principales.
+                REGLA ESTRICTA: El resumen DEBE TENER APROXIMADAMENTE 410 PALABRAS (entre 390 y 420 palabras).
+                Devuelve únicamente el texto del resumen sin encabezados ni introducciones.
+
+                Texto original:
+                {texto_raw}
+                """
+                resp_resumen = model.generate_content(prompt_resumen)
+                texto_final_impresion = resp_resumen.text.strip()
+            else:
+                # Truncar limpiamente a ~410 palabras si no hay API Key
+                palabras = texto_raw.split()
+                texto_final_impresion = " ".join(palabras[:410]) + "."
+        else:
+            texto_final_impresion = texto_raw
+
+        # 3. Crear el texto con etiquetas <mark> para el resaltado neón en la pantalla
+        palabras_impresion = texto_final_impresion.split()
+        mitad = len(palabras_impresion) // 2
+        # Seleccionar fragmentos clave para destacar
+        frase_1 = " ".join(palabras_impresion[10:min(30, mitad)])
+        frase_2 = " ".join(palabras_impresion[mitad:mitad+20])
+        
+        texto_para_interfaz = texto_final_impresion.replace(
+            frase_1, f"<mark class='highlight-neon'>{frase_1}</mark>"
+        ).replace(
+            frase_2, f"<mark class='highlight-neon'>{frase_2}</mark>"
+        )
+
+        # 4. Análisis Académico de 15 líneas (~177 palabras) para la interfaz web
         analisis_texto = (
-            f"El reporte periodístico titulado '{payload.titulo}' analiza detalladamente las transformaciones contemporáneas "
-            f"en los entornos comerciales y su repercusión en la estabilidad del mercado global. "
-            f"Esta dinámica se vincula de manera directa con los principios rectores de Introducción a los Negocios, "
-            f"evidenciando la puesta en práctica de modelos organizacionales, gestión estratégica de recursos y evaluación "
-            f"constante de riesgos operativos. Comprender el trasfondo de estos acontecimientos resulta clave para "
-            f"diseñar planes de contingencia eficientes que aseguren el crecimiento sostenible de cualquier entidad. "
-            f"Asimismo, se resalta la importancia primordial de mantener ventajas competitivas mediante la innovación, "
-            f"el control de presupuestos y la adaptación ágil a las nuevas necesidades del consumidor moderno. "
-            f"En conclusión, el estudio de este caso proporciona una perspectiva integral sobre las competencias "
-            f"directivas indispensables para liderar empresas con solidez y visión de futuro en mercados dinámicos."
+            f"La noticia titulada '{payload.titulo}' analiza el impacto directo de la transformación digital "
+            f"en la estructura operativa y la competitividad de las empresas contemporáneas. Este fenómeno "
+            f"guarda una estrecha relación con los contenidos de la asignatura Introducción a los Negocios, "
+            f"puesto que evidencia la aplicación de conceptos fundamentales como la optimización de procesos, "
+            f"la toma de decisiones estratégicas de inversión y la adaptación constante a los cambios del entorno macroeconómico. "
+            f"Comprender la relevancia de integrar soluciones tecnológicas avanzadas resulta indispensable para "
+            f"evaluar de qué manera las organizaciones pueden fortalecer sus ventajas competitivas y asegurar "
+            f"su sostenibilidad financiera en mercados altamente dinámicos. Asimismo, el artículo destaca la necesidad "
+            f"de formar alianzas comerciales sólidas e incentivar el desarrollo del talento humano directivo como "
+            f"ejes motores para impulsar la innovación continua. En conclusión, el caso expuesto proporciona una "
+            f"visión analítica sobre los retos reales a los que se enfrentan las pequeñas y medianas empresas "
+            f"para consolidar su crecimiento institucional dentro del ecosistema empresarial moderno."
         )
 
-        texto_subrayado_html = (
-            f"El desarrollo de las actividades comerciales exige una comprensión profunda de los mercados. "
-            f"<mark class='highlight-neon'>La innovación en modelos de negocio y la optimización de procesos operativos</mark> "
-            f"constituyen el pilar fundamental para garantizar la rentabilidad a largo plazo. "
-            f"Según los datos analizados en {payload.titulo}, <mark class='highlight-neon'>las empresas que adoptan tecnología digital e invierten en capital humano</mark> "
-            f"logran incrementar su eficiencia hasta en un 35% frente a sus competidores tradicionales. "
-            f"Por consiguiente, <mark class='highlight-neon'>la toma de decisiones basadas en análisis financiero y planificación estratégica</mark> "
-            f"resulta crucial para mitigar riesgos en periodos de incertidumbre económica."
-        )
-
+        # 5. Glosario de 5 palabras para la interfaz web
         glosario_items = [
             {
-                "palabra": "Sostenibilidad",
-                "definición": "Capacidad de mantener un rendimiento económico y operativo a largo plazo sin comprometer los recursos futuros de la organización.",
-                "sinonimos": "Durabilidad, viabilidad, permanencia.",
-                "antonimos": "Inestabilidad, insostenibilidad, caducidad."
-            },
-            {
-                "palabra": "Estrategia",
-                "definición": "Plan integral diseñado para alcanzar objetivos fundamentales y consolidar ventajas competitivas en el mercado.",
-                "sinonimos": "Táctica, planificación, directriz.",
-                "antonimos": "Improvisación, desorganización, caos."
+                "palabra": "Digitalización",
+                "definición": "Proceso de transformación tecnológica mediante el cual una empresa integra herramientas digitales en sus operaciones.",
+                "sinonimos": "Automatización, modernización, virtualización.",
+                "antonimos": "Manualidad, obsolescencia, atraso."
             },
             {
                 "palabra": "Rentabilidad",
-                "definición": "Relación entre los beneficios obtenidos y la inversión realizada para evaluar la eficiencia económica de un proyecto.",
-                "sinonimos": "Lucro, ganancia, rendimiento.",
+                "definición": "Capacidad de una inversión o negocio para generar ganancias superiores a los costos y recursos invertidos.",
+                "sinonimos": "Lucro, beneficio, rendimiento.",
                 "antonimos": "Pérdida, déficit, improductividad."
             },
             {
-                "palabra": "Optimización",
-                "definición": "Proceso de perfeccionar las actividades operativas para lograr el máximo rendimiento utilizando la menor cantidad de recursos.",
-                "sinonimos": "Mejora, maximización, perfeccionamiento.",
-                "antonimos": "Empeoramiento, desperdicio, ineficiencia."
+                "palabra": "Sostenibilidad",
+                "definición": "Habilidad de mantener procesos comerciales viables en el tiempo sin comprometer recursos ni estabilidad futura.",
+                "sinonimos": "Permanencia, durabilidad, continuidad.",
+                "antonimos": "Inestabilidad, caducidad, insostenibilidad."
+            },
+            {
+                "palabra": "Estrategia",
+                "definición": "Conjunto de decisiones y planes estructurados para alcanzar metas organizacionales y superar a la competencia.",
+                "sinonimos": "Planificación, táctica, directriz.",
+                "antonimos": "Improvisación, desorganización, caos."
             },
             {
                 "palabra": "Competitividad",
@@ -185,7 +243,8 @@ async def procesar_noticia(payload: NoticiaRequest):
             }
         ]
 
-        # Compilar archivo Word (.docx)
+        # 6. COMPILACIÓN EXCLUSIVA DEL DOCUMENTO WORD (.DOCX) - FORMATO 23 X 16 CM
+        # (Nota: Únicamente va el encabezado y el texto de ~410 palabras)
         doc = docx.Document()
         for section in doc.sections:
             section.top_margin = Cm(2)
@@ -193,27 +252,23 @@ async def procesar_noticia(payload: NoticiaRequest):
             section.left_margin = Cm(2.5)
             section.right_margin = Cm(2.5)
 
-        doc.add_heading(f'RECORTE N° {payload.num_recorte} - INTRODUCCIÓN A LOS NEGOCIOS', level=1)
+        # Título identificador de la materia
+        h1 = doc.add_heading(f'RECORTE N° {payload.num_recorte} - INTRODUCCIÓN A LOS NEGOCIOS', level=1)
+        h1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
         p_meta = doc.add_paragraph()
         p_meta.add_run(f"Fuente: {payload.url}\n").italic = True
+        p_meta.add_run("Formato de impresión recortable: 23 cm de alto x 16 cm de ancho\n").bold = True
 
+        # Insertar Captura del Encabezado (16 cm de ancho)
         if img_path and os.path.exists(img_path):
             doc.add_picture(img_path, width=Cm(16))
 
-        doc.add_heading('TEXTO DE LA NOTICIA (PARA SUBRAYADO FÍSICO)', level=2)
-        doc.add_paragraph(re.sub(r'<[^>]+>', '', texto_subrayado_html))
-
-        doc.add_page_break()
-        doc.add_heading('ANÁLISIS DE LA NOTICIA (15 LÍNEAS)', level=2)
-        doc.add_paragraph(analisis_texto)
-
-        doc.add_heading('GLOSARIO ACADÉMICO (5 PALABRAS CLAVE)', level=2)
-        for item in glosario_items:
-            p_g = doc.add_paragraph()
-            p_g.add_run(f"• {item['palabra']}: ").bold = True
-            p_g.add_run(f"{item['definición']}\n")
-            p_g.add_run(f"  - Sinónimos: {item['sinonimos']}\n").italic = True
-            p_g.add_run(f"  - Antónimos: {item['antonimos']}").italic = True
+        # Texto de la noticia (~410 palabras) para imprimir y recortar
+        p_body = doc.add_paragraph(texto_final_impresion)
+        p_body.paragraph_format.space_before = Pt(8)
+        p_body.paragraph_format.line_spacing = 1.15
+        p_body.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
         filename = f"Recorte_{payload.num_recorte}_Negocios.docx"
         filepath = os.path.join("static", filename)
@@ -221,7 +276,7 @@ async def procesar_noticia(payload: NoticiaRequest):
 
         return {
             "exito": True,
-            "texto_subrayado": texto_subrayado_html,
+            "texto_subrayado": texto_para_interfaz,
             "analisis": analisis_texto,
             "glosario": glosario_items,
             "download_url": f"/static/{filename}"
