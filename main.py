@@ -141,7 +141,7 @@ async def buscar_noticias(payload: dict = Body(default={})):
             Semilla única: {seed}.
             {"IMPORTANTE: Muestra titulares y temas completamente NUEVOS y distintos a los anteriores." if es_reset else ""}
             
-            Devuelve ÚNICAMENTE un arreglo JSON estricto sin formato markdown con enlaces base oficiales reales (ej: https://www.forbes.com.ec, https://www.ekosnegocios.com, https://www.bloomberglinea.com):
+            Devuelve ÚNICAMENTE un arreglo JSON estricto sin formato markdown con enlaces base oficiales reales:
             [
                 {{
                     "titulo": "Título exacto de la noticia",
@@ -254,18 +254,17 @@ async def procesar_noticia(payload: NoticiaRequest):
         datos = await capturar_y_extraer_noticia(payload.url, payload.titulo)
         img_path = datos["imagen"]
 
-        # 1. Redacción 100% Única y variada de exactamente 410 palabras sobre el tema específico
+        # Redacción 100% Única de exactamente 410 palabras sobre el tema específico
         prompt_noticia = f"""
         Escribe un artículo periodístico corporativo y especializado inédito que trate ÚNICAMENTE acerca de: "{payload.titulo}".
         REGLAS ESTRICTAS:
-        1. No utilices introducciones repetitivas ni plantillas genéricas. Desarrolla el tema con hechos económicos reales, perspectivas financieras y análisis directivo adaptados al título.
+        1. No utilices introducciones repetitivas ni plantillas genéricas. Desarrolla el tema con hechos económicos reales y perspectivas financieras adaptadas al título.
         2. La extensión final DEBE TENER EXACTAMENTE ENTRE 405 Y 415 PALABRAS.
         3. Devuelve ÚNICAMENTE el texto en párrafos continuos, sin títulos ni saludos.
         """
         texto_final_impresion = generar_contenido_seguro(prompt_noticia)
         
         if not texto_final_impresion or len(texto_final_impresion.split()) < 380:
-            # Texto alternativo único y dinámico basado en hashes del título para evitar repeticiones idénticas
             palabras_clave = payload.titulo.split()
             k1 = palabras_clave[0] if len(palabras_clave) > 0 else "Empresa"
             k2 = palabras_clave[len(palabras_clave)//2] if len(palabras_clave) > 1 else "Mercado"
@@ -292,14 +291,27 @@ async def procesar_noticia(payload: NoticiaRequest):
         if len(palabras) > 415:
             texto_final_impresion = " ".join(palabras[:410]) + "."
 
+        # Resaltado neón distribuido en 4 bloques para la interfaz
         total_p = len(palabras)
-        m1 = total_p // 4
-        m2 = total_p // 2
-        f1 = " ".join(palabras[m1:m1+12])
-        f2 = " ".join(palabras[m2:m2+12])
-        texto_para_interfaz = texto_final_impresion.replace(f1, f"<mark class='highlight-neon'>{f1}</mark>").replace(f2, f"<mark class='highlight-neon'>{f2}</mark>")
+        m1 = total_p // 6
+        m2 = (total_p * 2) // 6
+        m3 = (total_p * 4) // 6
+        m4 = (total_p * 5) // 6
 
-        # 2. Análisis académico de exactamente ~177 palabras
+        f1 = " ".join(palabras[m1:m1+16])
+        f2 = " ".join(palabras[m2:m2+14])
+        f3 = " ".join(palabras[m3:m3+16])
+        f4 = " ".join(palabras[m4:m4+14])
+
+        texto_para_interfaz = (
+            texto_final_impresion
+            .replace(f1, f"<mark class='highlight-neon'>{f1}</mark>")
+            .replace(f2, f"<mark class='highlight-neon'>{f2}</mark>")
+            .replace(f3, f"<mark class='highlight-neon'>{f3}</mark>")
+            .replace(f4, f"<mark class='highlight-neon'>{f4}</mark>")
+        )
+
+        # Análisis académico de exactamente ~177 palabras
         analisis_texto = (
             f"El reporte periodístico sobre '{payload.titulo}' examina de manera exhaustiva aspectos fundamentales del entorno empresarial contemporáneo, "
             f"ofreciendo una perspectiva analítica rigurosa sobre las dinámicas operacionales y estratégicas que configuran el mercado actual. "
@@ -312,7 +324,7 @@ async def procesar_noticia(payload: NoticiaRequest):
             f"para conducir de forma exitosa el crecimiento sostenible de la firma en periodos de transformación o incertidumbre global."
         )
 
-        # 3. Glosario académico detallado (mínimo dos líneas por definición)
+        # Glosario académico detallado (mínimo dos líneas por definición)
         glosario_items = [
             {
                 "palabra": "Planificación",
@@ -346,26 +358,18 @@ async def procesar_noticia(payload: NoticiaRequest):
             }
         ]
 
-        # 4. LLENADO EXACTO DEL DOCUMENTO GUÍA BASE ("template.docx")
-        # Asegúrate de haber guardado tu archivo plantilla como 'template.docx' en el directorio principal.
+        # LLENADO EXACTO DEL DOCUMENTO GUÍA BASE ("template.docx")
         ruta_template = "template.docx"
         if os.path.exists(ruta_template):
             doc = docx.Document(ruta_template)
         else:
-            # Fallback si no existe la plantilla en el directorio raíz
             doc = docx.Document()
             for section in doc.sections:
                 section.top_margin = Cm(2)
                 section.bottom_margin = Cm(2)
                 section.left_margin = Cm(2.5)
                 section.right_margin = Cm(2.5)
-            doc.add_heading(f'RECORTE N° {payload.num_recorte} - INTRODUCCIÓN A LOS NEGOCIOS', level=1)
-            doc.add_paragraph(f"Fuente: {payload.url}")
-            if img_path and os.path.exists(img_path):
-                doc.add_picture(img_path, width=Cm(12.55))
-            doc.add_paragraph(texto_final_impresion)
 
-        # Reemplazar marcadores dentro de la plantilla guía de Word
         for p in doc.paragraphs:
             if "IMAGEN CAPTURA DE NOTICIA" in p.text:
                 p.text = ""

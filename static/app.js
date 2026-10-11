@@ -1,6 +1,5 @@
 /* ==============================================================================
-   [SECCIÓN 1 - CONFIGURACIÓN INICIAL Y CÁLCULO DE RECORTE SEMANAL]
-   (Propósito: Calcula la semana académica actual y asigna eventos principales)
+   [SECCIÓN 1 - CONFIGURACIÓN E INICIALIZACIÓN DE EVENTOS]
    ============================================================================== */
 document.addEventListener("DOMContentLoaded", () => {
     const numRecorteInput = document.getElementById("numRecorte");
@@ -13,7 +12,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let archivoGeneradoUrl = "";
 
-    // Lunes 28 de Septiembre de 2026 = Recorte N° 1
     function calcularNumeroRecorte() {
         const fechaInicioSemana1 = new Date("2026-09-28T00:00:00");
         const fechaActual = new Date();
@@ -25,8 +23,7 @@ document.addEventListener("DOMContentLoaded", () => {
     calcularNumeroRecorte();
 
     /* ==============================================================================
-       [SECCIÓN 2 - PETICIÓN DE BÚSQUEDA MULTIFUENTE Y RENDERIZADO DE TARJETAS]
-       (Propósito: Llama al endpoint /api/buscar y dibuja las tarjetas con miniatura y fuente)
+       [SECCIÓN 2 - PETICIÓN DE BÚSQUEDA Y MONTAJE DE TARJETAS]
        ============================================================================== */
     async function realizarBusqueda(esReset = false) {
         btnBuscar.disabled = true;
@@ -59,7 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const card = document.createElement("div");
                 card.className = "news-card";
                 card.innerHTML = `
-                    <img src="${noticia.imagen_url || 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&auto=format&fit=crop&q=80'}" alt="Imagen noticia">
+                    <img src="${noticia.imagen_url || '[https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&auto=format&fit=crop&q=80](https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&auto=format&fit=crop&q=80)'}" alt="Imagen noticia">
                     <div class="news-card-content">
                         <div class="source">📰 FUENTE: ${noticia.medio || 'MEDIO DIGITAL'}</div>
                         <h3>${noticia.titulo}</h3>
@@ -90,8 +87,7 @@ document.addEventListener("DOMContentLoaded", () => {
     btnReset.addEventListener("click", () => realizarBusqueda(true));
 
     /* ==============================================================================
-       [SECCIÓN 3 - SELECCIÓN, OCULTAMIENTO Y PROCESAMIENTO DE LA NOTICIA]
-       (Propósito: Oculta tarjetas no elegidas y despliega la guía de subrayado, análisis y glosario)
+       [SECCIÓN 3 - DESPLIEGUE DEL ENLACE DIRECTO EN INTERFAZ Y RESULTADOS]
        ============================================================================== */
     async function seleccionarYProcesar(noticia, indiceElegido) {
         const cards = document.querySelectorAll(".news-card");
@@ -109,7 +105,7 @@ document.addEventListener("DOMContentLoaded", () => {
         btnDescargar.style.opacity = "0.5";
         btnDescargar.innerText = "⏳ GENERANDO DOCUMENTO Y GUÍA DE SUBRAYADO...";
 
-        tabContent.innerHTML = "<p style='color: var(--primary-neon);'>⏳ Procesando noticia seleccionada, aplicando formato Times New Roman 10pt y redactando ~410 palabras...</p>";
+        tabContent.innerHTML = "<p style='color: var(--primary-neon);'>⏳ Procesando la noticia seleccionada, aplicando plantilla guía y redactando las ~410 palabras...</p>";
 
         try {
             const response = await fetch("/api/procesar", {
@@ -139,17 +135,27 @@ document.addEventListener("DOMContentLoaded", () => {
                 `).join("");
 
                 tabContent.innerHTML = `
+                    <!-- Caja destacada con el enlace directo y exacto a la fuente oficial -->
+                    <div style="background: rgba(0, 242, 254, 0.12); border: 1px solid var(--primary-neon); padding: 1rem 1.25rem; border-radius: 10px; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <strong style="color: var(--primary-neon); font-size: 0.95rem;">🌐 ENLACE DIRECTO A LA FUENTE OFICIAL:</strong><br>
+                            <span style="color: #ffffff; font-size: 0.9rem; word-break: break-all;">${noticia.url}</span>
+                        </div>
+                        <a href="${noticia.url}" target="_blank" rel="noopener noreferrer" class="btn-neon" style="font-size: 0.8rem; padding: 0.5rem 1rem; text-decoration: none;">ABRIR ENLACE ↗</a>
+                    </div>
+
                     <h3 style="color: var(--primary-neon);">🖍️ 1. GUÍA PARA SUBRAYAR FÍSICAMENTE EN TU HOJA IMPRESA:</h3>
-                    <p style="margin-top: 0.5rem; line-height: 1.8; background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px; text-align: justify;">
-                        ${resultado.texto_subrayado}
-                    </p>
+                    <div id="subrayadoContainer" style="margin-top: 0.5rem; line-height: 1.8; background: rgba(0,0,0,0.35); padding: 1.25rem; border-radius: 8px; text-align: justify; border: 1px solid rgba(255,255,255,0.05);"></div>
                     <br>
                     <h3 style="color: var(--primary-neon);">📊 2. ANÁLISIS ACADÉMICO DE LA NOTICIA (15 LÍNEAS / ~177 PALABRAS):</h3>
-                    <p style="margin-top: 0.5rem; line-height: 1.6; text-align: justify;">${resultado.analisis}</p>
+                    <p style="margin-top: 0.5rem; line-height: 1.6; text-align: justify; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px;">${resultado.analisis}</p>
                     <br>
-                    <h3 style="color: var(--primary-neon);">📚 3. GLOSARIO ACADÉMICO (5 PALABRAS CLAVE):</h3>
+                    <h3 style="color: var(--primary-neon);">📚 3. GLOSARIO ACADÉMICO (5 PALABRAS CLAVE - MIN 2 LÍNEAS):</h3>
                     ${glosarioHtml}
                 `;
+
+                document.getElementById("subrayadoContainer").innerHTML = resultado.texto_subrayado;
+
             } else {
                 tabContent.innerHTML = `<p style="color: red;">Error al procesar: ${resultado.error}</p>`;
             }
@@ -161,8 +167,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     /* ==============================================================================
-       [SECCIÓN 4 - DESCARGA DEL DOCUMENTO WORD COMPILADO]
-       (Propósito: Descarga el archivo .docx listo para imprimir)
+       [SECCIÓN 4 - EVENTO DE DESCARGA DE WORD]
        ============================================================================== */
     btnDescargar.addEventListener("click", () => {
         if (archivoGeneradoUrl) {
