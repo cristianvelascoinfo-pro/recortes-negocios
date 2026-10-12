@@ -23,7 +23,7 @@ document.addEventListener("DOMContentLoaded", () => {
     calcularNumeroRecorte();
 
     /* ==============================================================================
-       [SECCIÓN 2 - PETICIÓN DE BÚSQUEDA Y MONTAJE DE TARJETAS]
+       [SECCIÓN 2 - TARJETAS DE PREVIEW CON ENLACE DIRECTO A LA NOTICIA]
        ============================================================================== */
     async function realizarBusqueda(esReset = false) {
         btnBuscar.disabled = true;
@@ -56,11 +56,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 const card = document.createElement("div");
                 card.className = "news-card";
                 card.innerHTML = `
-                    <img src="${noticia.imagen_url || '[https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&auto=format&fit=crop&q=80](https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&auto=format&fit=crop&q=80)'}" alt="Imagen noticia">
+                    <img src="${noticia.imagen_url || 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&auto=format&fit=crop&q=80'}" alt="Imagen noticia">
                     <div class="news-card-content">
                         <div class="source">📰 FUENTE: ${noticia.medio || 'MEDIO DIGITAL'}</div>
                         <h3>${noticia.titulo}</h3>
                         <p>${noticia.resumen_corto}</p>
+                        
+                        <!-- ENLACE DIRECTO EN LA TARJETA DE PREVIEW -->
+                        <div style="margin: 0.75rem 0; padding: 0.5rem; background: rgba(0, 242, 254, 0.08); border: 1px solid var(--primary-neon); border-radius: 6px;">
+                            <a href="${noticia.url}" target="_blank" rel="noopener noreferrer" style="color: var(--primary-neon); font-size: 0.82rem; font-weight: bold; text-decoration: underline; display: inline-block;">
+                                🌐 Abrir noticia original en vivo ↗
+                            </a>
+                        </div>
+
                         <button class="btn-neon btn-seleccionar" style="width: 100%;">SELECCIONAR NOTICIA ${index + 1}</button>
                     </div>
                 `;
@@ -71,7 +79,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     seleccionarYProcesar(noticia, index);
                 });
 
-                card.addEventListener("click", () => seleccionarYProcesar(noticia, index));
                 newsGrid.appendChild(card);
             });
 
@@ -87,7 +94,7 @@ document.addEventListener("DOMContentLoaded", () => {
     btnReset.addEventListener("click", () => realizarBusqueda(true));
 
     /* ==============================================================================
-       [SECCIÓN 3 - DESPLIEGUE DEL ENLACE DIRECTO EN INTERFAZ Y RESULTADOS]
+       [SECCIÓN 3 - RESULTADOS Y GENERACIÓN]
        ============================================================================== */
     async function seleccionarYProcesar(noticia, indiceElegido) {
         const cards = document.querySelectorAll(".news-card");
@@ -105,7 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
         btnDescargar.style.opacity = "0.5";
         btnDescargar.innerText = "⏳ GENERANDO DOCUMENTO Y GUÍA DE SUBRAYADO...";
 
-        tabContent.innerHTML = "<p style='color: var(--primary-neon);'>⏳ Procesando la noticia seleccionada, aplicando plantilla guía y redactando las ~410 palabras...</p>";
+        tabContent.innerHTML = "<p style='color: var(--primary-neon);'>⏳ Procesando la noticia seleccionada, aplicando plantilla guía y redactando ~410 palabras...</p>";
 
         try {
             const response = await fetch("/api/procesar", {
@@ -135,11 +142,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 `).join("");
 
                 tabContent.innerHTML = `
-                    <!-- Caja destacada con el enlace directo y exacto a la fuente oficial -->
                     <div style="background: rgba(0, 242, 254, 0.12); border: 1px solid var(--primary-neon); padding: 1rem 1.25rem; border-radius: 10px; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
                         <div>
-                            <strong style="color: var(--primary-neon); font-size: 0.95rem;">🌐 ENLACE DIRECTO A LA FUENTE OFICIAL:</strong><br>
-                            <span style="color: #ffffff; font-size: 0.9rem; word-break: break-all;">${noticia.url}</span>
+                            <strong style="color: var(--primary-neon); font-size: 0.95rem;">🌐 ENLACE DIRECTO A LA NOTICIA ESPECÍFICA:</strong><br>
+                            <span style="color: #ffffff; font-size: 0.88rem; word-break: break-all;">${noticia.url}</span>
                         </div>
                         <a href="${noticia.url}" target="_blank" rel="noopener noreferrer" class="btn-neon" style="font-size: 0.8rem; padding: 0.5rem 1rem; text-decoration: none;">ABRIR ENLACE ↗</a>
                     </div>
@@ -166,9 +172,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    /* ==============================================================================
-       [SECCIÓN 4 - EVENTO DE DESCARGA DE WORD]
-       ============================================================================== */
     btnDescargar.addEventListener("click", () => {
         if (archivoGeneradoUrl) {
             window.location.href = archivoGeneradoUrl;

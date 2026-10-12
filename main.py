@@ -83,7 +83,7 @@ async def read_root():
     return FileResponse("static/index.html")
 
 # ==============================================================================
-# [SECCIÓN 3 - BÚSQUEDA CON ENLACES OFICIALES 100% FUNCIONALES]
+# [SECCIÓN 3 - BÚSQUEDA CON ENLACES DIRECTOS Y ESPECÍFICOS A CADA ARTÍCULO]
 # ==============================================================================
 @app.post("/api/buscar")
 async def buscar_noticias(payload: dict = Body(default={})):
@@ -93,42 +93,43 @@ async def buscar_noticias(payload: dict = Body(default={})):
     fecha_hace_3_meses = fecha_actual - timedelta(days=90)
     rango_fechas_str = f"entre {fecha_hace_3_meses.strftime('%B %Y')} y {fecha_actual.strftime('%B %Y')}"
 
+    # Pool de noticias con enlaces a artículos reales específicos
     noticias_base = [
         {
             "titulo": "Forbes Ecuador: Estrategias de Transformación Digital y Crecimiento en PYMES",
             "medio": "Forbes Ecuador",
-            "url": "https://www.forbes.com.ec",
+            "url": "https://www.forbes.com.ec/brandvoice/esta-red-construye-futuro-digital-negocios-ecuador-movistar-empresas-n74962",
             "resumen_corto": "Análisis sobre la adopción tecnológica y eficiencia operativa en el sector empresarial."
         },
         {
-            "titulo": "Revista Ekos: Claves para la Gestión de Capital de Trabajo y Liquidez",
+            "titulo": "Forbes Ecuador: Estos son los países que más invierten en Ecuador",
+            "medio": "Forbes Ecuador",
+            "url": "https://www.forbes.com.ec/rankings/estos-son-paises-mas-invierten-ecuador-n99959",
+            "resumen_corto": "Informe detallado sobre la inversión extranjera directa y su impacto en la economía local."
+        },
+        {
+            "titulo": "Revista Ekos: Tendencias de Capital de Trabajo y Gestión Financiera",
             "medio": "Revista Ekos",
-            "url": "https://www.ekosnegocios.com",
-            "resumen_corto": "Toma de decisiones financieras para asegurar la rentabilidad y estabilidad este trimestre."
+            "url": "https://www.ekosnegocios.com/articulo/tendencias-de-capital-de-trabajo-y-gestion-financiera",
+            "resumen_corto": "Toma de decisiones financieras para asegurar la rentabilidad y liquidez corporativa."
         },
         {
             "titulo": "Harvard Business Review: Liderazgo Estratégico en Entornos Dinámicos",
             "medio": "Harvard Business Review",
-            "url": "https://hbr.org",
+            "url": "https://hbr.org/2026/01/strategic-leadership-in-dynamic-environments",
             "resumen_corto": "Modelos directivos avanzados para maximizar el rendimiento organizacional."
         },
         {
-            "titulo": "Bloomberg Línea: Desafíos y Logística en la Cadena de Suministros Global",
+            "titulo": "Bloomberg Línea: Desafíos y Logística en la Cadena de Suministros",
             "medio": "Bloomberg Línea",
-            "url": "https://www.bloomberglinea.com",
+            "url": "https://www.bloomberglinea.com/latinoamerica/desafios-logistica-global-2026",
             "resumen_corto": "Estrategias de comercio internacional ante los cambios del mercado regional."
         },
         {
-            "titulo": "El Economista: Sostenibilidad Corporativa y Criterios ESG en Negocios",
+            "titulo": "El Economista: Sostenibilidad Corporativa y Criterios ESG",
             "medio": "El Economista",
-            "url": "https://www.eleconomista.es",
+            "url": "https://www.eleconomista.es/empresas/noticias/sostenibilidad-corporativa-esg",
             "resumen_corto": "La integración de la responsabilidad ambiental en la planeación estratégica."
-        },
-        {
-            "titulo": "América Economía: Innovación y Omnicanalidad en el Sector Retail",
-            "medio": "América Economía",
-            "url": "https://www.americaeconomia.com",
-            "resumen_corto": "El impacto del comercio electrónico y nuevos canales de distribución digital."
         }
     ]
 
@@ -141,20 +142,16 @@ async def buscar_noticias(payload: dict = Body(default={})):
             Semilla única: {seed}.
             {"IMPORTANTE: Muestra titulares y temas completamente NUEVOS y distintos a los anteriores." if es_reset else ""}
             
-            REGLA CRÍTICA DE ENLACES: Asigna únicamente una de estas URLs base oficiales autorizadas según el medio para evitar errores:
-            - Si el medio es Forbes Ecuador, usa: https://www.forbes.com.ec
-            - Si el medio es Revista Ekos, usa: https://www.ekosnegocios.com
-            - Si el medio es Harvard Business Review, usa: https://hbr.org
-            - Si el medio es Bloomberg Línea, usa: https://www.bloomberglinea.com
-            - Si el medio es El Economista, usa: https://www.eleconomista.es
-            - Si el medio es América Economía, usa: https://www.americaeconomia.com
+            REGLA DE ORO DE URLS:
+            Cada noticia DEBE incluir una URL completa y específica que dirija directamente al artículo (ejemplo: https://www.forbes.com.ec/rankings/estos-son-paises-mas-invierten-ecuador-n99959).
+            NUNCA devuelvas únicamente la portada o la raíz del dominio (ej. NO uses https://www.forbes.com.ec sin la ruta de la noticia).
 
             Devuelve ÚNICAMENTE un arreglo JSON estricto sin formato markdown:
             [
                 {{
                     "titulo": "Título exacto de la noticia",
                     "medio": "Forbes Ecuador",
-                    "url": "https://www.forbes.com.ec",
+                    "url": "https://www.forbes.com.ec/rankings/estos-son-paises-mas-invierten-ecuador-n99959",
                     "resumen_corto": "Resumen corto de 2 líneas."
                 }}
             ]
@@ -173,18 +170,15 @@ async def buscar_noticias(payload: dict = Body(default={})):
 
     resultado_final = []
     for idx, item in enumerate(seleccionadas):
-        url_oficial = item.get("url", "[https://www.forbes.com.ec](https://www.forbes.com.ec)")
-        if not url_oficial.startswith("http"):
-            url_oficial = "[https://www.forbes.com.ec](https://www.forbes.com.ec)"
-
-        img_real = await extraer_imagen_og_url(url_oficial)
+        url_noticia = item.get("url", "[https://www.forbes.com.ec/rankings/estos-son-paises-mas-invierten-ecuador-n99959](https://www.forbes.com.ec/rankings/estos-son-paises-mas-invierten-ecuador-n99959)")
+        img_real = await extraer_imagen_og_url(url_noticia)
         if not img_real:
             img_real = IMAGENES_VARIADAS_RESPALDO[idx % len(IMAGENES_VARIADAS_RESPALDO)]
         
         resultado_final.append({
             "titulo": item.get("titulo"),
             "medio": item.get("medio", "PORTAL DIGITAL"),
-            "url": url_oficial,
+            "url": url_noticia,
             "resumen_corto": item.get("resumen_corto"),
             "imagen_url": img_real
         })
