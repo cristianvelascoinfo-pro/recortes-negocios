@@ -83,25 +83,16 @@ async def read_root():
     return FileResponse("static/index.html")
 
 # ==============================================================================
-<<<<<<< HEAD
-# [SECCIÓN 3 - BÚSQUEDA CON ENLACES OFICIALES 100% FUNCIONALES Y VERIFICADOS]
-=======
-# [SECCIÓN 3 - BÚSQUEDA CON ENLACES REALES Y VERIFICADOS]
->>>>>>> 9289263ce783d66513d61e09c835a8fa974cacbe
+# [SECCIÓN 3 - BÚSQUEDA CON ENLACES OFICIALES 100% FUNCIONALES]
 # ==============================================================================
 @app.post("/api/buscar")
 async def buscar_noticias(payload: dict = Body(default={})):
     es_reset = payload.get("reset", False)
     
-<<<<<<< HEAD
     fecha_actual = datetime.now()
     fecha_hace_3_meses = fecha_actual - timedelta(days=90)
     rango_fechas_str = f"entre {fecha_hace_3_meses.strftime('%B %Y')} y {fecha_actual.strftime('%B %Y')}"
 
-    # Base de noticias con URLs oficiales exactas y estables que nunca darán 404
-=======
-    # Base de noticias con enlaces reales y secciones activas verificadas para evitar 404
->>>>>>> 9289263ce783d66513d61e09c835a8fa974cacbe
     noticias_base = [
         {
             "titulo": "Forbes Ecuador: Estrategias de Transformación Digital y Crecimiento en PYMES",
@@ -112,56 +103,35 @@ async def buscar_noticias(payload: dict = Body(default={})):
         {
             "titulo": "Revista Ekos: Claves para la Gestión de Capital de Trabajo y Liquidez",
             "medio": "Revista Ekos",
-<<<<<<< HEAD
             "url": "https://www.ekosnegocios.com",
-=======
-            "url": "https://www.ekosnegocios.com/actualidad",
->>>>>>> 9289263ce783d66513d61e09c835a8fa974cacbe
             "resumen_corto": "Toma de decisiones financieras para asegurar la rentabilidad y estabilidad este trimestre."
         },
         {
             "titulo": "Harvard Business Review: Liderazgo Estratégico en Entornos Dinámicos",
             "medio": "Harvard Business Review",
-<<<<<<< HEAD
             "url": "https://hbr.org",
-=======
-            "url": "https://hbr.org/",
->>>>>>> 9289263ce783d66513d61e09c835a8fa974cacbe
             "resumen_corto": "Modelos directivos avanzados para maximizar el rendimiento organizacional."
         },
         {
             "titulo": "Bloomberg Línea: Desafíos y Logística en la Cadena de Suministros Global",
             "medio": "Bloomberg Línea",
-<<<<<<< HEAD
             "url": "https://www.bloomberglinea.com",
-=======
-            "url": "https://www.bloomberglinea.com/latinoamerica/",
->>>>>>> 9289263ce783d66513d61e09c835a8fa974cacbe
             "resumen_corto": "Estrategias de comercio internacional ante los cambios del mercado regional."
         },
         {
             "titulo": "El Economista: Sostenibilidad Corporativa y Criterios ESG en Negocios",
             "medio": "El Economista",
-<<<<<<< HEAD
             "url": "https://www.eleconomista.es",
-=======
-            "url": "https://www.eleconomista.es/empresas/",
->>>>>>> 9289263ce783d66513d61e09c835a8fa974cacbe
             "resumen_corto": "La integración de la responsabilidad ambiental en la planeación estratégica."
         },
         {
             "titulo": "América Economía: Innovación y Omnicanalidad en el Sector Retail",
             "medio": "América Economía",
-<<<<<<< HEAD
             "url": "https://www.americaeconomia.com",
-=======
-            "url": "https://www.americaeconomia.com/",
->>>>>>> 9289263ce783d66513d61e09c835a8fa974cacbe
             "resumen_corto": "El impacto del comercio electrónico y nuevos canales de distribución digital."
         }
     ]
 
-<<<<<<< HEAD
     if GEMINI_API_KEY:
         try:
             model = genai.GenerativeModel('gemini-1.5-flash')
@@ -171,7 +141,7 @@ async def buscar_noticias(payload: dict = Body(default={})):
             Semilla única: {seed}.
             {"IMPORTANTE: Muestra titulares y temas completamente NUEVOS y distintos a los anteriores." if es_reset else ""}
             
-            REGLA CRÍTICA DE ENLACES: Asigna únicamente una de estas URLs base oficiales autorizadas según el medio para evitar errores 404:
+            REGLA CRÍTICA DE ENLACES: Asigna únicamente una de estas URLs base oficiales autorizadas según el medio para evitar errores:
             - Si el medio es Forbes Ecuador, usa: https://www.forbes.com.ec
             - Si el medio es Revista Ekos, usa: https://www.ekosnegocios.com
             - Si el medio es Harvard Business Review, usa: https://hbr.org
@@ -199,14 +169,10 @@ async def buscar_noticias(payload: dict = Body(default={})):
         except Exception as e:
             print(f"Aviso búsqueda IA: {e}")
 
-=======
-    # Mezclar y seleccionar 3 opciones reales garantizadas
->>>>>>> 9289263ce783d66513d61e09c835a8fa974cacbe
     seleccionadas = random.sample(noticias_base, min(3, len(noticias_base)))
 
     resultado_final = []
     for idx, item in enumerate(seleccionadas):
-        # Asegurar que la URL sea segura y válida
         url_oficial = item.get("url", "[https://www.forbes.com.ec](https://www.forbes.com.ec)")
         if not url_oficial.startswith("http"):
             url_oficial = "[https://www.forbes.com.ec](https://www.forbes.com.ec)"
@@ -432,7 +398,7 @@ async def procesar_noticia(payload: NoticiaRequest):
                 run_text.font.size = Pt(10)
                 p.paragraph_format.line_spacing = 1.15
                 p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                texto_insertado = Status = True
+                texto_insertado = True
 
         if not imagen_insertada and img_path and os.path.exists(img_path):
             p_img = doc.add_paragraph()
