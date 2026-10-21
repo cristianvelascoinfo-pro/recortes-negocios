@@ -96,7 +96,7 @@ async def buscar_noticias(payload: dict = Body(default={})):
 
     noticias_base = [
         {
-            "titulo": "Forbes Ecuador: Estrategias de Transformación Digital y Crecimiento en PYMES",
+            "titulo": "Forbes Ecuador: Estrategias de MJ Transformación Digital y Crecimiento en PYMES",
             "medio": "Forbes Ecuador",
             "resumen_corto": "Análisis sobre la adopción tecnológica y eficiencia operativa en el sector empresarial."
         },
