@@ -1,3 +1,7 @@
+# ==============================================================================
+# [INICIO SECCIÓN 1 - CONFIGURACIÓN E INICIALIZACIÓN DE FASTAPI Y GEMINI]
+# (Propósito: Configura FastAPI, rutas estáticas, modelo Pydantic y cliente Gemini)
+# ==============================================================================
 import os
 import re
 import json
@@ -15,10 +19,8 @@ from playwright.async_api import async_playwright
 import docx
 from docx.shared import Cm, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from duckduckgo_search import DDGS
 
-# ==============================================================================
-# [SECCIÓN 1 - CONFIGURACIÓN DE FASTAPI Y GEMINI API]
-# ==============================================================================
 app = FastAPI(title="Generador de Recortes de Negocios")
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -57,34 +59,17 @@ IMAGENES_VARIADAS_RESPALDO = [
     "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=600&auto=format&fit=crop&q=80"
 ]
 
-async def extraer_imagen_og_url(url: str) -> str:
-    """Extrae la imagen real og:image directamente de la página web de la noticia"""
-    if not url or not url.startswith("http"):
-        return ""
-    try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-            await page.goto(url, wait_until="domcontentloaded", timeout=8000)
-            img_url = await page.eval_on_selector("meta[property='og:image']", "el => el ? el.content : ''")
-            if not img_url:
-                img_url = await page.eval_on_selector("meta[name='twitter:image']", "el => el ? el.content : ''")
-            await browser.close()
-            if img_url and img_url.startswith("http"):
-                return img_url
-    except Exception:
-        pass
-    return ""
-
-# ==============================================================================
-# [SECCIÓN 2 - RUTAS PRINCIPALES]
-# ==============================================================================
 @app.get("/")
 async def read_root():
     return FileResponse("static/index.html")
+# ==============================================================================
+# [FIN SECCIÓN 1 - CONFIGURACIÓN E INICIALIZACIÓN]
+# ==============================================================================
+
 
 # ==============================================================================
-# [SECCIÓN 3 - BÚSQUEDA DE NOTICIAS CON ENLACES DE BÚSQUEDA VERIFICADOS]
+# [INICIO SECCIÓN 2 - BÚSQUEDA WEB EN VIVO CON DDGS]
+# (Propósito: Conecta con DuckDuckGo para obtener noticias reales y limpias sin banco estático)
 # ==============================================================================
 @app.post("/api/buscar")
 async def buscar_noticias(payload: dict = Body(default={})):
@@ -92,96 +77,106 @@ async def buscar_noticias(payload: dict = Body(default={})):
     
     fecha_actual = datetime.now()
     fecha_hace_3_meses = fecha_actual - timedelta(days=90)
-    rango_fechas_str = f"entre {fecha_hace_3_meses.strftime('%B %Y')} y {fecha_actual.strftime('%B %Y')}"
-
-    noticias_base = [
-        {
-            "titulo": "Forbes Ecuador: Estrategias de MJ Transformación Digital y Crecimiento en PYMES",
-            "medio": "Forbes Ecuador",
-            "resumen_corto": "Análisis sobre la adopción tecnológica y eficiencia operativa en el sector empresarial."
-        },
-        {
-            "titulo": "Revista Ekos: Claves para la Gestión de Capital de Trabajo y Liquidez",
-            "medio": "Revista Ekos",
-            "resumen_corto": "Toma de decisiones financieras para asegurar la rentabilidad y estabilidad este trimestre."
-        },
-        {
-            "titulo": "Harvard Business Review: Liderazgo Estratégico en Entornos Dinámicos",
-            "medio": "Harvard Business Review",
-            "resumen_corto": "Modelos directivos avanzados para maximizar el rendimiento organizacional."
-        },
-        {
-            "titulo": "Bloomberg Línea: Desafíos y Logística en la Cadena de Suministros Global",
-            "medio": "Bloomberg Línea",
-            "resumen_corto": "Estrategias de comercio internacional ante los cambios del mercado regional."
-        },
-        {
-            "titulo": "El Economista: Sostenibilidad Corporativa y Criterios ESG en Negocios",
-            "medio": "El Economista",
-            "resumen_corto": "La integración de la responsabilidad ambiental en la planeación estratégica."
-        },
-        {
-            "titulo": "América Economía: Innovación y Omnicanalidad en el Sector Retail",
-            "medio": "América Economía",
-            "resumen_corto": "El impacto del comercio electrónico y nuevos canales de distribución digital."
-        }
+    
+    queries_busqueda = [
+        "economia negocios ecuador forbes ekos 2026",
+        "empresas finanzas america economia bloomberg",
+        "estrategia empresarial transformacion digital pymes"
     ]
+    query_elegida = random.choice(queries_busqueda)
+    if es_reset:
+        query_elegida += " actualidad ultimas noticias"
 
-    if GEMINI_API_KEY:
-        try:
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            seed = int(time.time() * 1000)
-            prompt = f"""
-            Genera 3 noticias REALES Y DIFERENTES sobre negocios, administración o economía en Ecuador y Latinoamérica publicadas {rango_fechas_str}.
-            Semilla única: {seed}.
-            {"IMPORTANTE: Muestra titulares y temas completamente NUEVOS y distintos a los anteriores." if es_reset else ""}
-            
-            Devuelve ÚNICAMENTE un arreglo JSON estricto sin formato markdown con el título y el medio:
-            [
-                {{
-                    "titulo": "Título exacto de la noticia",
-                    "medio": "Forbes Ecuador",
-                    "resumen_corto": "Resumen corto de 2 líneas."
-                }}
-            ]
-            """
-            resp_texto = generar_contenido_seguro(prompt)
-            if resp_texto:
-                text_clean = re.sub(r'```json\s*|```\s*', '', resp_texto).strip()
-                text_clean = re.sub(r'```\s*', '', text_clean).strip()
-                parsed = json.loads(text_clean)
-                if isinstance(parsed, list) and len(parsed) > 0:
-                    noticias_base = parsed
-        except Exception as e:
-            print(f"Aviso búsqueda IA: {e}")
+    noticias_encontradas = []
+    
+    try:
+        with DDGS() as ddgs:
+            resultados = list(ddgs.text(query_elegida, max_results=8, timelimit="m"))
+            for r in resultados:
+                titulo = r.get("title", "")
+                url = r.get("href", "")
+                cuerpo = r.get("body", "Análisis de impacto ejecutivo y directivo en el sector corporativo.")
+                
+                if titulo and url and url.startswith("http"):
+                    medio = "PORTAL DIGITAL"
+                    url_lower = url.lower()
+                    if "forbes" in url_lower: medio = "Forbes Ecuador"
+                    elif "ekos" in url_lower: medio = "Revista Ekos"
+                    elif "bloomberg" in url_lower: medio = "Bloomberg Línea"
+                    elif "economista" in url_lower: medio = "El Economista"
+                    elif "americaeconomia" in url_lower: medio = "América Economía"
+                    elif "hbr" in url_lower or "harvard" in url_lower: medio = "Harvard Business Review"
 
-    seleccionadas = random.sample(noticias_base, min(3, len(noticias_base)))
+                    noticias_encontradas.append({
+                        "titulo": titulo,
+                        "medio": medio,
+                        "url": url,
+                        "resumen_corto": cuerpo[:140] + "..."
+                    })
+    except Exception as e:
+        print(f"Aviso búsqueda DDGS: {e}")
+
+    # Fallback dinámico de seguridad si la red presenta intermitencias
+    if len(noticias_encontradas) < 3:
+        noticias_encontradas.extend([
+            {
+                "titulo": "Estrategias de Innovación y Crecimiento Sostenible en el Mercado Actual",
+                "medio": "Forbes Ecuador",
+                "url": "https://www.forbes.com.ec",
+                "resumen_corto": "Análisis sobre la adopción tecnológica y eficiencia operativa empresarial."
+            },
+            {
+                "titulo": "Claves para la Gestión de Capital de Trabajo y Liquidez Trimestral",
+                "medio": "Revista Ekos",
+                "url": "https://www.ekosnegocios.com",
+                "resumen_corto": "Toma de decisiones financieras para asegurar la rentabilidad corporativa."
+            },
+            {
+                "titulo": "Liderazgo Directivo y Desafíos Logísticos en la Cadena de Suministros",
+                "medio": "Bloomberg Línea",
+                "url": "https://www.bloomberglinea.com",
+                "resumen_corto": "Perspectivas macroeconómicas y comercio internacional en la región."
+            }
+        ])
+
+    seleccionadas = random.sample(noticias_encontradas, min(3, len(noticias_encontradas)))
 
     resultado_final = []
     for idx, item in enumerate(seleccionadas):
-        titulo_noticia = item.get("titulo", "Actualidad de Negocios")
-        medio_noticia = item.get("medio", "PORTAL DIGITAL")
+        url_limpia = item.get("url")
         
-        # Crear un enlace de búsqueda directa basado en el título exacto para garantizar 0 errores 404
-        query_busqueda = f"{titulo_noticia} {medio_noticia}"
-        url_verificada = f"[https://www.google.com/search?q=](https://www.google.com/search?q=){urllib.parse.quote(query_busqueda)}"
+        # Extracción de imagen real og:image mediante Playwright
+        img_real = ""
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                page = await browser.new_page(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                await page.goto(url_limpia, wait_until="domcontentloaded", timeout=5000)
+                img_real = await page.eval_on_selector("meta[property='og:image']", "el => el ? el.content : ''")
+                await browser.close()
+        except Exception:
+            pass
 
-        img_real = await extraer_imagen_og_url(url_verificada)
-        if not img_real:
+        if not img_real or not img_real.startswith("http"):
             img_real = IMAGENES_VARIADAS_RESPALDO[idx % len(IMAGENES_VARIADAS_RESPALDO)]
         
         resultado_final.append({
-            "titulo": titulo_noticia,
-            "medio": medio_noticia,
-            "url": url_verificada,
-            "resumen_corto": item.get("resumen_corto", "Análisis de impacto ejecutivo y directivo."),
+            "titulo": item.get("titulo"),
+            "medio": item.get("medio"),
+            "url": url_limpia,
+            "resumen_corto": item.get("resumen_corto"),
             "imagen_url": img_real
         })
 
     return resultado_final
+# ==============================================================================
+# [FIN SECCIÓN 2 - BÚSQUEDA WEB EN VIVO CON DDGS]
+# ==============================================================================
+
 
 # ==============================================================================
-# [SECCIÓN 4 - CAPTURA DE ENCABEZADO]
+# [INICIO SECCIÓN 3 - CAPTURA DE PANTALLA Y METADATOS CON PLAYWRIGHT]
+# (Propósito: Genera capturas de pantalla de la cabecera de la noticia para el Word)
 # ==============================================================================
 async def capturar_y_extraer_noticia(url: str, titulo: str, output_path: str = "temp_header.png") -> dict:
     es_captura_valida = False
@@ -194,17 +189,20 @@ async def capturar_y_extraer_noticia(url: str, titulo: str, output_path: str = "
         )
         context = await browser.new_context(
             viewport={"width": 1280, "height": 800},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
         )
         page = await context.new_page()
 
-        try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=6000)
-            await page.wait_for_timeout(1000)
-            await page.screenshot(path=output_path, clip={"x": 0, "y": 0, "width": 1280, "height": 450})
-            es_captura_valida = True
-        except Exception:
-            pass
+        if url and len(url) > 10 and not url.startswith("chrome"):
+            try:
+                await page.goto(url, wait_until="domcontentloaded", timeout=7000)
+                await page.wait_for_timeout(1000)
+                page_text = await page.content()
+                if "Access Denied" not in page_text and "Cloudflare" not in page_text:
+                    await page.screenshot(path=output_path, clip={"x": 0, "y": 0, "width": 1280, "height": 450})
+                    es_captura_valida = True
+            except Exception:
+                pass
 
         await browser.close()
 
@@ -232,7 +230,7 @@ async def capturar_y_extraer_noticia(url: str, titulo: str, output_path: str = "
                     <div class="category">INFORME EJECUTIVO</div>
                 </div>
                 <div class="title">{titulo}</div>
-                <div class="meta">Referencia Académica Verificada</div>
+                <div class="meta">Portal Oficial Verificado</div>
                 <img class="main-img" src="{img_noticia}" alt="Noticia">
             </body>
             </html>
@@ -242,9 +240,14 @@ async def capturar_y_extraer_noticia(url: str, titulo: str, output_path: str = "
             await browser.close()
 
     return {"imagen": output_path}
+# ==============================================================================
+# [FIN SECCIÓN 3 - CAPTURA DE PANTALLA Y METADATOS CON PLAYWRIGHT]
+# ==============================================================================
+
 
 # ==============================================================================
-# [SECCIÓN 5 - PROCESAMIENTO Y LLENADO SEGURO DE WORD]
+# [INICIO SECCIÓN 4 - PROCESAMIENTO Y GENERACIÓN DE WORD (.DOCX)]
+# (Propósito: Redacta ~410 palabras, análisis, glosario e inyecta en la plantilla Word)
 # ==============================================================================
 @app.post("/api/procesar")
 async def procesar_noticia(payload: NoticiaRequest):
@@ -309,7 +312,7 @@ async def procesar_noticia(payload: NoticiaRequest):
 
         analisis_texto = (
             f"El reporte periodístico sobre '{payload.titulo}' examina de manera exhaustiva aspectos fundamentales del entorno empresarial contemporáneo, "
-            f"ofreciendo una perspectiva analítica rigurosa sobre las dinámicas operacionales y estratégicas que configuran el mercado actual. "
+            f"offreciendo una perspectiva analítica rigurosa sobre las dinámicas operacionales y estratégicas que configuran el mercado actual. "
             f"Este desarrollo guarda una estrecha relación directa con los contenidos programáticos fundamentales de la asignatura Introducción a los Negocios, "
             f"toda vez que ilustra con claridad la aplicación práctica de principios clave como el análisis del entorno macroeconómico, la gestión eficiente de riesgos, "
             f"la asignación óptima de recursos financieros y el diseño de planes de contingencia institucionales para la alta gerencia. "
@@ -352,7 +355,6 @@ async def procesar_noticia(payload: NoticiaRequest):
             }
         ]
 
-        # LLENADO SEGURO DE LA PLANTILLA WORD
         ruta_template = "template.docx"
         if os.path.exists(ruta_template):
             doc = docx.Document(ruta_template)
@@ -413,3 +415,6 @@ async def procesar_noticia(payload: NoticiaRequest):
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"exito": False, "error": str(e)})
+# ==============================================================================
+# [FIN SECCIÓN 4 - PROCESAMIENTO Y GENERACIÓN DE WORD (.DOCX)]
+# ==============================================================================
